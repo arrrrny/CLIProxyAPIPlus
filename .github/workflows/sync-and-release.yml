@@ -1,0 +1,105 @@
+name: Daily Sync & Release
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLIPROXY_SYNC }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Record patch commit SHA before reset
+        id: patch
+        run: |
+          PATCH_SHA=$(git log --grep="patch: use arrrrny/models" --format="%H" -1)
+          echo "sha=$PATCH_SHA" >> "$GITHUB_OUTPUT"
+          # Save the workflow file before reset
+          cp .github/workflows/sync-and-release.yml /tmp/sync-and-release.yml
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/router-for-me/CLIProxyAPIPlus.git
+          git fetch upstream --tags --force
+
+      - name: Get latest upstream tag
+        id: upstream
+        run: |
+          TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Reset to upstream/main and apply patch
+        run: |
+          git reset --hard upstream/main
+          git cherry-pick ${{ steps.patch.outputs.sha }} || {
+            git diff --name-only --diff-filter=U | while read f; do
+              git checkout --ours "$f"
+              git add "$f"
+            done
+            git cherry-pick --continue --no-edit
+          }
+
+      - name: Restore sync-and-release workflow
+        run: |
+          mkdir -p .github/workflows
+          cp /tmp/sync-and-release.yml .github/workflows/sync-and-release.yml
+          git add .github/workflows/sync-and-release.yml
+          git diff --cached --quiet || git commit -m "ci: restore sync-and-release workflow"
+
+      - name: Check for changes to push
+        id: check
+        run: |
+          git fetch origin main
+          if git diff --quiet origin/main HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push main
+        if: steps.check.outputs.has_changes == 'true'
+        run: git push origin main --force-with-lease
+
+      - name: Check if tag already exists as release
+        id: release
+        if: steps.check.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CLIPROXY_SYNC }}
+        run: |
+          TAG="${{ steps.upstream.outputs.tag }}"
+          EXISTING=$(gh release view "$TAG" --repo "${{ github.repository }}" --json tagName 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "Deleting existing release for $TAG"
+            gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag
+          fi
+
+      - name: Create release tag
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          PREV_TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -2 | tail -1 | sed 's|.*refs/tags/||')
+          git tag -f "${{ steps.upstream.outputs.tag }}" HEAD
+          git push origin "${{ steps.upstream.outputs.tag }}" --force
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${{ steps.upstream.outputs.tag }}" ]; then
+            git tag -f "$PREV_TAG" upstream/main
+            git push origin "$PREV_TAG" --force
+          fi
+
+      - name: Summary
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Patch applied: \`${{ steps.patch.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
