@@ -43,11 +43,7 @@
         "min": 1024,
         "max": 128000,
         "zero_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -64,12 +60,7 @@
         "min": 1024,
         "max": 128000,
         "zero_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "max"
-        ]
+        "levels": ["low", "medium", "high", "max"]
       }
     },
     {
@@ -86,13 +77,7 @@
         "min": 1024,
         "max": 128000,
         "zero_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max"
-        ]
+        "levels": ["low", "medium", "high", "xhigh", "max"]
       }
     },
     {
@@ -273,10 +258,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -301,11 +283,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -330,10 +308,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "high"
-        ]
+        "levels": ["minimal", "high"]
       }
     },
     {
@@ -358,12 +333,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -388,10 +358,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "high"
-        ]
+        "levels": ["minimal", "high"]
       }
     },
     {
@@ -416,10 +383,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     }
   ],
@@ -518,10 +482,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -546,12 +507,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -576,11 +532,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -605,10 +557,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "high"
-        ]
+        "levels": ["minimal", "high"]
       }
     },
     {
@@ -633,12 +582,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -663,10 +607,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -679,9 +620,7 @@
       "name": "models/imagen-4.0-generate-001",
       "version": "4.0",
       "description": "Imagen 4.0 image generation model",
-      "supportedGenerationMethods": [
-        "predict"
-      ]
+      "supportedGenerationMethods": ["predict"]
     },
     {
       "id": "imagen-4.0-ultra-generate-001",
@@ -693,9 +632,7 @@
       "name": "models/imagen-4.0-ultra-generate-001",
       "version": "4.0",
       "description": "Imagen 4.0 Ultra high-quality image generation model",
-      "supportedGenerationMethods": [
-        "predict"
-      ]
+      "supportedGenerationMethods": ["predict"]
     },
     {
       "id": "imagen-3.0-generate-002",
@@ -707,9 +644,7 @@
       "name": "models/imagen-3.0-generate-002",
       "version": "3.0",
       "description": "Imagen 3.0 image generation model",
-      "supportedGenerationMethods": [
-        "predict"
-      ]
+      "supportedGenerationMethods": ["predict"]
     },
     {
       "id": "imagen-3.0-fast-generate-001",
@@ -721,9 +656,7 @@
       "name": "models/imagen-3.0-fast-generate-001",
       "version": "3.0",
       "description": "Imagen 3.0 fast image generation model",
-      "supportedGenerationMethods": [
-        "predict"
-      ]
+      "supportedGenerationMethods": ["predict"]
     },
     {
       "id": "imagen-4.0-fast-generate-001",
@@ -735,9 +668,7 @@
       "name": "models/imagen-4.0-fast-generate-001",
       "version": "4.0",
       "description": "Imagen 4.0 fast image generation model",
-      "supportedGenerationMethods": [
-        "predict"
-      ]
+      "supportedGenerationMethods": ["predict"]
     }
   ],
   "gemini-cli": [
@@ -835,10 +766,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -863,11 +791,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -892,12 +816,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -922,12 +841,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     }
   ],
@@ -1098,12 +1012,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -1211,17 +1120,9 @@
       "description": "Stable version of GPT 5.2",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "none",
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["none", "low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1235,16 +1136,9 @@
       "description": "Stable version of GPT 5.3 Codex, The best model for coding and agentic tasks across domains.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1258,16 +1152,9 @@
       "description": "Stable version of GPT 5.4",
       "context_length": 1050000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1281,16 +1168,9 @@
       "description": "GPT-5.4 mini brings the strengths of GPT-5.4 to a faster, more efficient model designed for high-volume workloads.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1329,17 +1209,9 @@
       "description": "Stable version of GPT 5.2",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "none",
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["none", "low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1353,16 +1225,9 @@
       "description": "Stable version of GPT 5.3 Codex, The best model for coding and agentic tasks across domains.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1376,16 +1241,9 @@
       "description": "Stable version of GPT 5.4",
       "context_length": 1050000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1399,16 +1257,9 @@
       "description": "GPT-5.4 mini brings the strengths of GPT-5.4 to a faster, more efficient model designed for high-volume workloads.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1470,17 +1321,9 @@
       "description": "Stable version of GPT 5.2",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "none",
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["none", "low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1494,16 +1337,9 @@
       "description": "Stable version of GPT 5.3 Codex, The best model for coding and agentic tasks across domains.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1517,16 +1353,9 @@
       "description": "Ultra-fast coding model.",
       "context_length": 128000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1540,16 +1369,9 @@
       "description": "Stable version of GPT 5.4",
       "context_length": 1050000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1563,16 +1385,9 @@
       "description": "GPT-5.4 mini brings the strengths of GPT-5.4 to a faster, more efficient model designed for high-volume workloads.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1634,17 +1449,9 @@
       "description": "Stable version of GPT 5.2",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "none",
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["none", "low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1658,16 +1465,9 @@
       "description": "Stable version of GPT 5.3 Codex, The best model for coding and agentic tasks across domains.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1681,16 +1481,9 @@
       "description": "Ultra-fast coding model.",
       "context_length": 128000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1704,16 +1497,9 @@
       "description": "Stable version of GPT 5.4",
       "context_length": 1050000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1727,16 +1513,9 @@
       "description": "GPT-5.4 mini brings the strengths of GPT-5.4 to a faster, more efficient model designed for high-volume workloads.",
       "context_length": 400000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1899,12 +1678,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
       }
     },
     {
@@ -1921,10 +1695,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -1941,10 +1712,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "high"
-        ]
+        "levels": ["low", "high"]
       }
     },
     {
@@ -1959,10 +1727,7 @@
         "min": 128,
         "max": 32768,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "high"
-        ]
+        "levels": ["minimal", "high"]
       }
     },
     {
@@ -1979,11 +1744,7 @@
         "min": 1,
         "max": 65535,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -2000,11 +1761,7 @@
         "min": 1,
         "max": 65535,
         "dynamic_allowed": true,
-        "levels": [
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["low", "medium", "high"]
       }
     },
     {
@@ -2033,12 +1790,24 @@
         "max": 65535,
         "zero_allowed": true,
         "dynamic_allowed": true,
-        "levels": [
-          "minimal",
-          "low",
-          "medium",
-          "high"
-        ]
+        "levels": ["minimal", "low", "medium", "high"]
+      }
+    },
+    {
+      "id": "gemini-3-flash-agent",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 3 Flash Agent",
+      "name": "gemini-3-flash-agent",
+      "description": "Gemini 3 Flash Agent",
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamic_allowed": true,
+        "levels": ["minimal", "low", "medium", "high"]
       }
     }
   ]
