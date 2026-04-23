@@ -16,6 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.CLIPROXY_SYNC }}
+          ref: sync
 
       - name: Configure Git
         run: |
@@ -40,12 +41,12 @@ jobs:
 
       - name: Rebase custom commits onto upstream/main
         run: |
-          # Rebase local main onto the latest upstream/main.
-          # This keeps all custom commits on top of the latest upstream.
-          git rebase upstream/main main || {
+          # Rebase local sync branch onto the latest upstream/main.
+          # This keeps your custom commits on top of the latest upstream.
+          git rebase upstream/main sync || {
             echo "Rebase failed due to conflicts. Attempting to resolve by preferring our changes..."
             git rebase --abort
-            git rebase -X theirs upstream/main main
+            git rebase -X theirs upstream/main sync
           }
 
       - name: Restore sync-and-release workflow
@@ -60,16 +61,16 @@ jobs:
       - name: Check for changes to push
         id: check
         run: |
-          git fetch origin main
-          if git diff --quiet origin/main HEAD; then
+          git fetch origin sync
+          if git diff --quiet origin/sync HEAD; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Push main
+      - name: Push sync branch
         if: steps.check.outputs.has_changes == 'true'
-        run: git push origin main --force-with-lease
+        run: git push origin sync --force-with-lease
 
       - name: Create release tag
         if: steps.check.outputs.has_changes == 'true'
@@ -82,4 +83,4 @@ jobs:
         run: |
           echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Action: Rebased custom commits onto upstream/main" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Rebased custom commits onto upstream/main on branch \`sync\`" >> "$GITHUB_STEP_SUMMARY"
