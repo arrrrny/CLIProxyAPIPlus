@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.CLIPROXY_SYNC }}
-          ref: sync
+
 
       - name: Configure Git
         run: |
@@ -61,12 +61,8 @@ jobs:
       - name: Check for changes to push
         id: check
         run: |
-          git fetch origin sync
-          if git diff --quiet origin/sync HEAD; then
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
+          # Always allow release/tag creation if we are running the workflow
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Push sync branch
         if: steps.check.outputs.has_changes == 'true'
