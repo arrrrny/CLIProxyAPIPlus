@@ -1,0 +1,85 @@
+name: Daily Sync & Release
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLIPROXY_SYNC }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Save workflow file
+        run: |
+          cp .github/workflows/sync-and-release.yml /tmp/sync-and-release.yml
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/router-for-me/CLIProxyAPI.git
+          git fetch upstream --tags --force
+          git fetch upstream main
+
+      - name: Get latest upstream tag
+        id: upstream
+        run: |
+          TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Rebase custom commits onto upstream/main
+        run: |
+          # Rebase local main onto the latest upstream/main.
+          # This keeps all custom commits on top of the latest upstream.
+          git rebase upstream/main main || {
+            echo "Rebase failed due to conflicts. Attempting to resolve by preferring our changes..."
+            git rebase --abort
+            git rebase -X theirs upstream/main main
+          }
+
+      - name: Restore sync-and-release workflow
+        run: |
+          mkdir -p .github/workflows
+          cp /tmp/sync-and-release.yml .github/workflows/sync-and-release.yml
+          git add .github/workflows/sync-and-release.yml
+          if ! git diff --cached --quiet; then
+            git commit -m "ci: restore sync-and-release workflow"
+          fi
+
+      - name: Check for changes to push
+        id: check
+        run: |
+          git fetch origin main
+          if git diff --quiet origin/main HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push main
+        if: steps.check.outputs.has_changes == 'true'
+        run: git push origin main --force-with-lease
+
+      - name: Create release tag
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git tag -f "${{ steps.upstream.outputs.tag }}" HEAD
+          git push origin "${{ steps.upstream.outputs.tag }}" --force
+
+      - name: Summary
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Rebased custom commits onto upstream/main" >> "$GITHUB_STEP_SUMMARY"
