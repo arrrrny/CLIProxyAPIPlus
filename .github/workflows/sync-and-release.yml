@@ -22,18 +22,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Record patch commit SHA before reset
-        id: patch
+      - name: Save workflow file
         run: |
-          PATCH_SHA=$(git log --grep="patch: use arrrrny/models" --format="%H" -1)
-          echo "sha=$PATCH_SHA" >> "$GITHUB_OUTPUT"
-          # Save the workflow file before reset
           cp .github/workflows/sync-and-release.yml /tmp/sync-and-release.yml
 
       - name: Fetch upstream
         run: |
-          git remote add upstream https://github.com/router-for-me/CLIProxyAPIPlus.git
+          git remote add upstream https://github.com/router-for-me/CLIProxyAPI.git
           git fetch upstream --tags --force
+          git fetch upstream main
 
       - name: Get latest upstream tag
         id: upstream
@@ -41,15 +38,14 @@ jobs:
           TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Reset to upstream/main and apply patch
+      - name: Rebase custom commits onto upstream/main
         run: |
-          git reset --hard upstream/main
-          git cherry-pick ${{ steps.patch.outputs.sha }} || {
-            git diff --name-only --diff-filter=U | while read f; do
-              git checkout --ours "$f"
-              git add "$f"
-            done
-            git cherry-pick --continue --no-edit
+          # Rebase local main onto the latest upstream/main.
+          # This keeps all custom commits on top of the latest upstream.
+          git rebase upstream/main main || {
+            echo "Rebase failed due to conflicts. Attempting to resolve by preferring our changes..."
+            git rebase --abort
+            git rebase -X theirs upstream/main main
           }
 
       - name: Restore sync-and-release workflow
@@ -57,7 +53,9 @@ jobs:
           mkdir -p .github/workflows
           cp /tmp/sync-and-release.yml .github/workflows/sync-and-release.yml
           git add .github/workflows/sync-and-release.yml
-          git diff --cached --quiet || git commit -m "ci: restore sync-and-release workflow"
+          if ! git diff --cached --quiet; then
+            git commit -m "ci: restore sync-and-release workflow"
+          fi
 
       - name: Check for changes to push
         id: check
@@ -73,33 +71,15 @@ jobs:
         if: steps.check.outputs.has_changes == 'true'
         run: git push origin main --force-with-lease
 
-      - name: Check if tag already exists as release
-        id: release
-        if: steps.check.outputs.has_changes == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.CLIPROXY_SYNC }}
-        run: |
-          TAG="${{ steps.upstream.outputs.tag }}"
-          EXISTING=$(gh release view "$TAG" --repo "${{ github.repository }}" --json tagName 2>/dev/null || echo "")
-          if [ -n "$EXISTING" ]; then
-            echo "Deleting existing release for $TAG"
-            gh release delete "$TAG" --repo "${{ github.repository }}" --yes --cleanup-tag
-          fi
-
       - name: Create release tag
         if: steps.check.outputs.has_changes == 'true'
         run: |
-          PREV_TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -2 | tail -1 | sed 's|.*refs/tags/||')
           git tag -f "${{ steps.upstream.outputs.tag }}" HEAD
           git push origin "${{ steps.upstream.outputs.tag }}" --force
-          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "${{ steps.upstream.outputs.tag }}" ]; then
-            git tag -f "$PREV_TAG" upstream/main
-            git push origin "$PREV_TAG" --force
-          fi
 
       - name: Summary
         if: steps.check.outputs.has_changes == 'true'
         run: |
           echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Patch applied: \`${{ steps.patch.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Rebased custom commits onto upstream/main" >> "$GITHUB_STEP_SUMMARY"
