@@ -1207,16 +1207,9 @@
       "description": "Automatic approval review model for Codex.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     }
   ],
@@ -1296,16 +1289,9 @@
       "description": "Frontier model for complex coding, research, and real-world work.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1319,16 +1305,9 @@
       "description": "Automatic approval review model for Codex.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     }
   ],
@@ -1424,16 +1403,9 @@
       "description": "Frontier model for complex coding, research, and real-world work.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1447,16 +1419,9 @@
       "description": "Automatic approval review model for Codex.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     }
   ],
@@ -1552,16 +1517,9 @@
       "description": "Frontier model for complex coding, research, and real-world work.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     },
     {
@@ -1575,16 +1533,9 @@
       "description": "Automatic approval review model for Codex.",
       "context_length": 272000,
       "max_completion_tokens": 128000,
-      "supported_parameters": [
-        "tools"
-      ],
+      "supported_parameters": ["tools"],
       "thinking": {
-        "levels": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ]
+        "levels": ["low", "medium", "high", "xhigh"]
       }
     }
   ],
@@ -1829,6 +1780,24 @@
       "thinking": {
         "min": 128,
         "max": 32768,
+        "dynamic_allowed": true,
+        "levels": ["minimal", "low", "medium", "high"]
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-agent",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 3.1 Flash Agent",
+      "name": "gemini-3.1-flash-agent",
+      "description": "Gemini 3.1 Flash Agent",
+      "context_length": 1048576,
+      "max_completion_tokens": 65535,
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "zero_allowed": true,
         "dynamic_allowed": true,
         "levels": ["minimal", "low", "medium", "high"]
       }
