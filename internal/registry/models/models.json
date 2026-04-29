@@ -1762,13 +1762,13 @@
       }
     },
     {
-      "id": "gemini-3.1-flash-agent",
+      "id": "gemini-3-flash-agent",
       "object": "model",
       "owned_by": "antigravity",
       "type": "antigravity",
-      "display_name": "Gemini 3.1 Flash Agent",
-      "name": "gemini-3.1-flash-agent",
-      "description": "Gemini 3.1 Flash Agent",
+      "display_name": "Gemini 3 Flash Agent",
+      "name": "gemini-3-flash-agent",
+      "description": "Gemini 3 Flash Agent",
       "context_length": 1048576,
       "max_completion_tokens": 65535,
       "thinking": {
