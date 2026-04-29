@@ -21,7 +21,6 @@ const (
 
 var modelsURLs = []string{
 	"https://raw.githubusercontent.com/arrrrny/models/refs/heads/main/models.json",
-	// "https://models.router-for.me/models.json",
 }
 
 //go:embed models/models.json
