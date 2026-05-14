@@ -268,14 +268,19 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 		return true, 0, ""
 	}
 
-	if secretHash == "" || bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(provided)) != nil {
-		fail()
-		return false, http.StatusUnauthorized, "invalid management key"
+	if secretHash != "" {
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(secretHash)) == 1 {
+			reset()
+			return true, 0, ""
+		}
+		if bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(provided)) == nil {
+			reset()
+			return true, 0, ""
+		}
 	}
 
-	reset()
-
-	return true, 0, ""
+	fail()
+	return false, http.StatusUnauthorized, "invalid management key"
 }
 
 // persist saves the current in-memory config to disk.
