@@ -38,14 +38,13 @@ jobs:
           TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Rebase custom commits onto upstream/main
+      - name: Merge upstream/main into plus
         run: |
-          # Rebase local sync branch onto the latest upstream/main.
-          # This keeps your custom commits on top of the latest upstream.
-          git rebase upstream/main sync || {
-            echo "Rebase failed due to conflicts. Attempting to resolve by preferring our changes..."
-            git rebase --abort
-            git rebase -X theirs upstream/main sync
+          # Merge upstream/main into the current plus branch.
+          # This incorporates upstream changes while preferring our changes in case of conflicts.
+          git merge upstream/main -m "chore: sync with upstream/main" -X ours || {
+            echo "Merge failed unexpectedly even with -X ours."
+            exit 1
           }
 
       - name: Restore sync-and-release workflow
@@ -63,9 +62,9 @@ jobs:
           # Always allow release/tag creation if we are running the workflow
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-      - name: Push sync branch
+      - name: Push plus branch
         if: steps.check.outputs.has_changes == 'true'
-        run: git push origin sync --force-with-lease
+        run: git push origin plus
 
       - name: Create release tag
         if: steps.check.outputs.has_changes == 'true'
@@ -78,4 +77,4 @@ jobs:
         run: |
           echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Action: Rebased custom commits onto upstream/main on branch \`sync\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Merged upstream/main into branch \`plus\`" >> "$GITHUB_STEP_SUMMARY"

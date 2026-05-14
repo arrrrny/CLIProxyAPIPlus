@@ -728,9 +728,20 @@ func gitLabGatewayHeaders(auth *cliproxyauth.Auth, targetProvider string) map[st
 	if _, ok := out["User-Agent"]; !ok {
 		out["User-Agent"] = gitLabNativeUserAgent
 	}
-	if strings.EqualFold(strings.TrimSpace(targetProvider), "openai") {
-		if _, ok := out["anthropic-beta"]; !ok {
-			out["anthropic-beta"] = gitLabContext1MBeta
+
+	model := gitLabResolvedModel(auth, "")
+	if gitLabUsesAnthropicGateway(auth, model) {
+		// Use "anthropic-beta" as it might have been set by user in duo_gateway_headers
+		currentBeta := out["anthropic-beta"]
+		if currentBeta == "" {
+			// Try canonical name too
+			currentBeta = out["Anthropic-Beta"]
+		}
+
+		if currentBeta == "" {
+			out["Anthropic-Beta"] = gitLabContext1MBeta
+		} else if !strings.Contains(currentBeta, gitLabContext1MBeta) {
+			out["Anthropic-Beta"] = currentBeta + "," + gitLabContext1MBeta
 		}
 	}
 	if len(out) == 0 {

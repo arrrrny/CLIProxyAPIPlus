@@ -386,7 +386,6 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestEnsureAccessToken_WarmTokenLoadsCreditsHint(t *testing.T) {
-	resetAntigravityCreditsRetryState()
 	t.Cleanup(resetAntigravityCreditsRetryState)
 
 	exec := NewAntigravityExecutor(&config.Config{
@@ -400,8 +399,9 @@ func TestEnsureAccessToken_WarmTokenLoadsCreditsHint(t *testing.T) {
 		},
 	}
 	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" {
-			t.Fatalf("unexpected request url %s", req.URL.String())
+		u := req.URL.String()
+		if u != "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" && u != "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" {
+			t.Fatalf("unexpected request url %s", u)
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -450,8 +450,9 @@ func TestUpdateAntigravityCreditsBalance_LoadCodeAssistUserAgent(t *testing.T) {
 		Attributes: map[string]string{"user_agent": userAgent},
 	}
 	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() != "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" {
-			t.Fatalf("unexpected request url %s", req.URL.String())
+		u := req.URL.String()
+		if u != "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" && u != "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" {
+			t.Fatalf("unexpected request url %s", u)
 		}
 		if got := req.Header.Get("User-Agent"); got != userAgent {
 			t.Fatalf("User-Agent = %q, want %q", got, userAgent)

@@ -1235,15 +1235,12 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
 			return cliproxyexecutor.Response{}, errWait
 		}
 	}
-	if lastErr != nil {
-		if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-			if resp, ok := m.tryAntigravityCreditsExecute(ctx, req, opts); ok {
-				return resp, nil
-			}
+	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
+		if resp, ok := m.tryAntigravityCreditsExecute(ctx, req, opts); ok {
+			return resp, nil
 		}
-		return cliproxyexecutor.Response{}, lastErr
 	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cliproxyexecutor.Response{}, lastErr
 }
 
 // It supports multiple providers for the same model and round-robins the starting provider per model.
@@ -1270,10 +1267,7 @@ func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req clip
 			return cliproxyexecutor.Response{}, errWait
 		}
 	}
-	if lastErr != nil {
-		return cliproxyexecutor.Response{}, lastErr
-	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cliproxyexecutor.Response{}, lastErr
 }
 
 // ExecuteStream performs a streaming execution using the configured selector and executor.
@@ -1301,19 +1295,16 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
 			return nil, errWait
 		}
 	}
-	if lastErr != nil {
-		if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-			if result, ok := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); ok {
-				return result, nil
-			}
+	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
+		if result, ok := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); ok {
+			return result, nil
 		}
-		var bootstrapErr *streamBootstrapError
-		if errors.As(lastErr, &bootstrapErr) && bootstrapErr != nil {
-			return streamErrorResult(bootstrapErr.Headers(), bootstrapErr.cause), nil
-		}
-		return nil, lastErr
 	}
-	return nil, &Error{Code: "auth_not_found", Message: "no auth available"}
+	var bootstrapErr *streamBootstrapError
+	if errors.As(lastErr, &bootstrapErr) && bootstrapErr != nil {
+		return streamErrorResult(bootstrapErr.Headers(), bootstrapErr.cause), nil
+	}
+	return nil, lastErr
 }
 
 func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, maxRetryCredentials int) (cliproxyexecutor.Response, error) {

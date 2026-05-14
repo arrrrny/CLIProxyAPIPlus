@@ -220,7 +220,7 @@ func TestApplyCodexWebsocketHeadersPassesThroughClientIdentityHeaders(t *testing
 	if got := headerValueCaseInsensitive(headers, "session_id"); got != "sess-client" {
 		t.Fatalf("session_id = %s, want sess-client", got)
 	}
-	if _, ok := headers["session_id"]; !ok {
+	if _, ok := headers["session_id"]; !ok { //nolint:staticcheck
 		t.Fatalf("expected lowercase session_id header key, got %#v", headers)
 	}
 }
@@ -352,7 +352,7 @@ func TestApplyCodexPromptCacheHeadersSetsLowercaseSessionAndLegacyConversation(t
 	if got := headerValueCaseInsensitive(headers, "session_id"); got != "cache-1" {
 		t.Fatalf("session_id = %s, want cache-1", got)
 	}
-	if _, ok := headers["session_id"]; !ok {
+	if _, ok := headers["session_id"]; !ok { //nolint:staticcheck
 		t.Fatalf("expected lowercase session_id key, got %#v", headers)
 	}
 	if got := headers.Get("Conversation_id"); got != "cache-1" {
@@ -368,7 +368,7 @@ func TestApplyCodexWebsocketHeadersUsesCanonicalAccountHeader(t *testing.T) {
 	if got := headerValueCaseInsensitive(headers, "ChatGPT-Account-ID"); got != "acct-1" {
 		t.Fatalf("ChatGPT-Account-ID = %s, want acct-1", got)
 	}
-	values, ok := headers["ChatGPT-Account-ID"]
+	values, ok := headers["ChatGPT-Account-ID"] //nolint:staticcheck
 	if !ok {
 		t.Fatalf("expected exact ChatGPT-Account-ID key, got %#v", headers)
 	}
