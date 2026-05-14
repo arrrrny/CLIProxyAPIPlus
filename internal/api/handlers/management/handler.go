@@ -180,7 +180,7 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 // AuthenticateManagementKey verifies the provided management key for the given client.
 // It mirrors the behaviour of Middleware() so non-HTTP callers can reuse the same logic.
 func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, provided string) (bool, int, string) {
-	const maxFailures = 5
+	const maxFailures = 15 // Increased from 5
 	const banDuration = 30 * time.Minute
 
 	if h == nil {
@@ -206,9 +206,13 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 	ai := h.failedAttempts[clientIP]
 	if ai != nil && !ai.blockedUntil.IsZero() {
 		if now.Before(ai.blockedUntil) {
-			remaining := ai.blockedUntil.Sub(now).Round(time.Second)
-			h.attemptsMu.Unlock()
-			return false, http.StatusForbidden, fmt.Sprintf("IP banned due to too many failed attempts. Try again in %s", remaining)
+			// Allow local clients to bypass the ban if they provide a key
+			// (we will validate the key below)
+			if !localClient {
+				remaining := ai.blockedUntil.Sub(now).Round(time.Second)
+				h.attemptsMu.Unlock()
+				return false, http.StatusForbidden, fmt.Sprintf("IP banned due to too many failed attempts. Try again in %s", remaining)
+			}
 		}
 		// Ban expired, reset state
 		ai.blockedUntil = time.Time{}
@@ -221,6 +225,9 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 	}
 
 	fail := func() {
+		if localClient {
+			return
+		}
 		h.attemptsMu.Lock()
 		aip := h.failedAttempts[clientIP]
 		if aip == nil {

@@ -75,7 +75,71 @@ func GetKimiModels() []*ModelInfo {
 
 // GetAntigravityModels returns the standard Antigravity model definitions.
 func GetAntigravityModels() []*ModelInfo {
-	return cloneModelInfos(getModels().Antigravity)
+	models := cloneModelInfos(getModels().Antigravity)
+
+	// Add Gemini 2.5 models if not already in the catalog
+	models = upsertModelInfos(models,
+		&ModelInfo{
+			ID:                  "gemini-2.5-flash-thinking",
+			Object:              "model",
+			OwnedBy:             "antigravity",
+			Type:                "antigravity",
+			DisplayName:         "Gemini 2.5 Flash Thinking",
+			ContextLength:       1048576,
+			MaxCompletionTokens: 65536,
+			Thinking: &ThinkingSupport{
+				Min:            1,
+				Max:            65535,
+				ZeroAllowed:    true,
+				DynamicAllowed: true,
+				Levels:         []string{"minimal", "low", "medium", "high"},
+			},
+		},
+		&ModelInfo{
+			ID:                  "gemini-2.5-flash-lite",
+			Object:              "model",
+			OwnedBy:             "antigravity",
+			Type:                "antigravity",
+			DisplayName:         "Gemini 2.5 Flash Lite",
+			ContextLength:       1048576,
+			MaxCompletionTokens: 65536,
+			Thinking: &ThinkingSupport{
+				Max:            24576,
+				ZeroAllowed:    true,
+				DynamicAllowed: true,
+			},
+		},
+		&ModelInfo{
+			ID:                  "gemini-2.5-flash",
+			Object:              "model",
+			OwnedBy:             "antigravity",
+			Type:                "antigravity",
+			DisplayName:         "Gemini 2.5 Flash",
+			ContextLength:       1048576,
+			MaxCompletionTokens: 65536,
+			Thinking: &ThinkingSupport{
+				Max:            24576,
+				ZeroAllowed:    true,
+				DynamicAllowed: true,
+			},
+		},
+		&ModelInfo{
+			ID:                  "gemini-2.5-pro",
+			Object:              "model",
+			OwnedBy:             "antigravity",
+			Type:                "antigravity",
+			DisplayName:         "Gemini 2.5 Pro",
+			ContextLength:       1048576,
+			MaxCompletionTokens: 65536,
+			Thinking: &ThinkingSupport{
+				Min:            128,
+				Max:            32768,
+				DynamicAllowed: true,
+			},
+		},
+	)
+
+	return models
 }
 
 // GetCodeBuddyModels returns the available models for CodeBuddy (Tencent).
