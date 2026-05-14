@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	internalconfig "github.com/router-for-me/CLIProxyAPI/v6/internal/config"
+	internalconfig "github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 )
 
 func TestResolveOAuthUpstreamModel_SuffixPreservation(t *testing.T) {
@@ -184,8 +184,6 @@ func createAuthForChannel(channel string) *Auth {
 		return &Auth{Provider: "aistudio"}
 	case "antigravity":
 		return &Auth{Provider: "antigravity"}
-	case "iflow":
-		return &Auth{Provider: "iflow"}
 	case "kimi":
 		return &Auth{Provider: "kimi"}
 	case "kiro":

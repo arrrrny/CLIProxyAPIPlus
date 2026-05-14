@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v6/internal/runtime/executor/helps"
-	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/auth"
-	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/executor"
-	"github.com/router-for-me/CLIProxyAPI/v6/sdk/cliproxy/usage"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
+	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
+	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/usage"
 	"github.com/tidwall/gjson"
 	"github.com/tiktoken-go/tokenizer"
 )
@@ -72,8 +72,8 @@ func payloadRequestedModel(opts cliproxyexecutor.Options, fallback string) strin
 	return helps.PayloadRequestedModel(opts, fallback)
 }
 
-func applyPayloadConfigWithRoot(cfg *config.Config, model, protocol, root string, payload, original []byte, requestedModel string) []byte {
-	return helps.ApplyPayloadConfigWithRoot(cfg, model, protocol, root, payload, original, requestedModel)
+func applyPayloadConfigWithRoot(cfg *config.Config, model, protocol, root string, payload, original []byte, requestedModel string, requestPath string) []byte {
+	return helps.ApplyPayloadConfigWithRoot(cfg, model, protocol, root, payload, original, requestedModel, requestPath)
 }
 
 func summarizeErrorBody(contentType string, body []byte) string {
@@ -82,6 +82,13 @@ func summarizeErrorBody(contentType string, body []byte) string {
 
 func apiKeyFromContext(ctx context.Context) string {
 	return helps.APIKeyFromContext(ctx)
+}
+
+func requestPathFromOptions(opts cliproxyexecutor.Options) string {
+	if path, ok := opts.Metadata[cliproxyexecutor.RequestPathMetadataKey].(string); ok {
+		return path
+	}
+	return ""
 }
 
 func tokenizerForModel(model string) (tokenizer.Codec, error) {
