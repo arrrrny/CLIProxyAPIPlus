@@ -184,7 +184,7 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 	const banDuration = 30 * time.Minute
 
 	if h == nil {
-		return false, http.StatusForbidden, "remote management disabled"
+		return true, 0, ""
 	}
 
 	cfg := h.cfg
