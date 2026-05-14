@@ -700,7 +700,41 @@ func (s *Server) registerManagementRoutes() {
 		g.PUT("/vertex-api-key", s.mgmt.PutVertexCompatKeys)
 		g.PATCH("/vertex-api-key", s.mgmt.PatchVertexCompatKey)
 		g.DELETE("/vertex-api-key", s.mgmt.DeleteVertexCompatKey)
-		
+
+		g.GET("/oauth-excluded-models", s.mgmt.GetOAuthExcludedModels)
+		g.PUT("/oauth-excluded-models", s.mgmt.PutOAuthExcludedModels)
+		g.PATCH("/oauth-excluded-models", s.mgmt.PatchOAuthExcludedModels)
+		g.DELETE("/oauth-excluded-models", s.mgmt.DeleteOAuthExcludedModels)
+
+		g.GET("/oauth-model-alias", s.mgmt.GetOAuthModelAlias)
+		g.PUT("/oauth-model-alias", s.mgmt.PutOAuthModelAlias)
+		g.PATCH("/oauth-model-alias", s.mgmt.PatchOAuthModelAlias)
+		g.DELETE("/oauth-model-alias", s.mgmt.DeleteOAuthModelAlias)
+
+		g.GET("/auth-files", s.mgmt.ListAuthFiles)
+		g.GET("/auth-files/models", s.mgmt.GetAuthFileModels)
+		g.GET("/model-definitions/:channel", s.mgmt.GetStaticModelDefinitions)
+		g.GET("/auth-files/download", s.mgmt.DownloadAuthFile)
+		g.POST("/auth-files", s.mgmt.UploadAuthFile)
+		g.DELETE("/auth-files", s.mgmt.DeleteAuthFile)
+		g.PATCH("/auth-files/status", s.mgmt.PatchAuthFileStatus)
+		g.PATCH("/auth-files/fields", s.mgmt.PatchAuthFileFields)
+		g.POST("/vertex/import", s.mgmt.ImportVertexCredential)
+
+		g.GET("/anthropic-auth-url", s.mgmt.RequestAnthropicToken)
+		g.GET("/codex-auth-url", s.mgmt.RequestCodexToken)
+		g.GET("/gitlab-auth-url", s.mgmt.RequestGitLabToken)
+		g.POST("/gitlab-auth-url", s.mgmt.RequestGitLabPATToken)
+		g.GET("/gemini-cli-auth-url", s.mgmt.RequestGeminiCLIToken)
+		g.GET("/antigravity-auth-url", s.mgmt.RequestAntigravityToken)
+		g.GET("/kilo-auth-url", s.mgmt.RequestKiloToken)
+		g.GET("/kimi-auth-url", s.mgmt.RequestKimiToken)
+		g.GET("/kiro-auth-url", s.mgmt.RequestKiroToken)
+		g.GET("/cursor-auth-url", s.mgmt.RequestCursorToken)
+		g.GET("/github-auth-url", s.mgmt.RequestGitHubToken)
+		g.POST("/oauth-callback", s.mgmt.PostOAuthCallback)
+		g.GET("/get-auth-status", s.mgmt.GetAuthStatus)
+
 		g.GET("/keep-alive", s.handleKeepAlive)
 	}
 
