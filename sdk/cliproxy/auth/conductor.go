@@ -2627,6 +2627,8 @@ func isRequestInvalidError(err error) bool {
 		msg := err.Error()
 		return strings.Contains(msg, "\"status\":\"UNKNOWN\"") ||
 			strings.Contains(msg, "\"status\": \"UNKNOWN\"")
+	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+		return true
 	default:
 		return false
 	}

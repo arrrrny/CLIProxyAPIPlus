@@ -1598,6 +1598,72 @@
   ],
   "antigravity": [
     {
+      "id": "gemini-2.5-flash-thinking",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 2.5 Flash Thinking",
+      "name": "gemini-2.5-flash-thinking",
+      "description": "Gemini 2.5 Flash Thinking via Antigravity",
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "zero_allowed": true,
+        "dynamic_allowed": true,
+        "levels": ["minimal", "low", "medium", "high"]
+      }
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 2.5 Flash Lite",
+      "name": "gemini-2.5-flash-lite",
+      "description": "Gemini 2.5 Flash Lite via Antigravity",
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "max": 24576,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      }
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 2.5 Flash",
+      "name": "gemini-2.5-flash",
+      "description": "Gemini 2.5 Flash via Antigravity",
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "max": 24576,
+        "zero_allowed": true,
+        "dynamic_allowed": true
+      }
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "object": "model",
+      "owned_by": "antigravity",
+      "type": "antigravity",
+      "display_name": "Gemini 2.5 Pro",
+      "name": "gemini-2.5-pro",
+      "description": "Gemini 2.5 Pro via Antigravity",
+      "context_length": 1048576,
+      "max_completion_tokens": 65536,
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamic_allowed": true
+      }
+    },
+    {
       "id": "claude-opus-4-6-thinking",
       "object": "model",
       "owned_by": "antigravity",

@@ -37,7 +37,7 @@ func StartService(cfg *config.Config, configPath string, localPassword string) {
 	if localPassword != "" {
 		var keepAliveCancel context.CancelFunc
 		runCtx, keepAliveCancel = context.WithCancel(ctxSignal)
-		builder = builder.WithServerOptions(api.WithKeepAliveEndpoint(10*time.Second, func() {
+		builder = builder.WithServerOptions(api.WithKeepAliveEndpoint(60*time.Second, func() {
 			log.Warn("keep-alive endpoint idle for 10s, shutting down")
 			keepAliveCancel()
 		}))
