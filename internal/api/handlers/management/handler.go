@@ -206,13 +206,9 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 	ai := h.failedAttempts[clientIP]
 	if ai != nil && !ai.blockedUntil.IsZero() {
 		if now.Before(ai.blockedUntil) {
-			// Allow local clients to bypass the ban if they provide a key
-			// (we will validate the key below)
-			if !localClient {
-				remaining := ai.blockedUntil.Sub(now).Round(time.Second)
-				h.attemptsMu.Unlock()
-				return false, http.StatusForbidden, fmt.Sprintf("IP banned due to too many failed attempts. Try again in %s", remaining)
-			}
+			remaining := ai.blockedUntil.Sub(now).Round(time.Second)
+			h.attemptsMu.Unlock()
+			return false, http.StatusForbidden, fmt.Sprintf("IP banned due to too many failed attempts. Try again in %s", remaining)
 		}
 		// Ban expired, reset state
 		ai.blockedUntil = time.Time{}
@@ -225,9 +221,6 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 	}
 
 	fail := func() {
-		if localClient {
-			return
-		}
 		h.attemptsMu.Lock()
 		aip := h.failedAttempts[clientIP]
 		if aip == nil {
