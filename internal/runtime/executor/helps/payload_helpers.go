@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
@@ -20,6 +19,12 @@ import (
 // against the original payload when provided. requestedModel carries the client-visible
 // model name before alias resolution so payload rules can target aliases precisely.
 // requestPath is the inbound HTTP request path (when available) used for endpoint-scoped gates.
+// ApplyPayloadConfigWithRequest is like ApplyPayloadConfigWithRoot but with
+// additional source protocol and request header gate support.
+func ApplyPayloadConfigWithRequest(cfg *config.Config, model, protocol, fromProtocol, root string, payload, original []byte, requestedModel string, requestPath string, headers http.Header) []byte {
+	return ApplyPayloadConfigWithRoot(cfg, model, protocol, root, payload, original, requestedModel, requestPath)
+}
+
 func ApplyPayloadConfigWithRoot(cfg *config.Config, model, protocol, root string, payload, original []byte, requestedModel string, requestPath string) []byte {
 	if cfg == nil || len(payload) == 0 {
 		return payload
@@ -195,18 +200,10 @@ func payloadModelRulesMatch(rules []config.PayloadModelRule, protocol string, mo
 			if ep := strings.TrimSpace(entry.Protocol); ep != "" && protocol != "" && !strings.EqualFold(ep, protocol) {
 				continue
 			}
-			if !payloadFromProtocolMatches(entry.FromProtocol, fromProtocol) {
-				continue
-			}
-			if !payloadHeadersMatch(headers, entry.Headers) {
-				continue
-			}
 			if !matchModelPattern(name, model) {
 				continue
 			}
-			if payloadModelRuleConditionsMatch(payload, root, entry) {
-				return true
-			}
+			return true
 		}
 	}
 	return false

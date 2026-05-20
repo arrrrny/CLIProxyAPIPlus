@@ -25,9 +25,35 @@ import (
 const (
 	defaultImagesMainModel = "gpt-5.4-mini"
 	defaultImagesToolModel = "gpt-image-2"
+	defaultXAIImagesModel  = "grok-imagine-image"
+	xaiImagesQualityModel  = "grok-imagine-image-quality"
 	imagesGenerationsPath  = "/v1/images/generations"
 	imagesEditsPath        = "/v1/images/edits"
 )
+
+func imagesModelParts(model string) (prefix string, baseModel string) {
+	model = strings.TrimSpace(model)
+	if idx := strings.LastIndex(model, "/"); idx >= 0 && idx < len(model)-1 {
+		return strings.TrimSpace(model[:idx]), strings.TrimSpace(model[idx+1:])
+	}
+	return "", model
+}
+
+func imagesModelBase(model string) string {
+	_, baseModel := imagesModelParts(model)
+	return strings.ToLower(strings.TrimSpace(baseModel))
+}
+
+func isXAIImagesModel(model string) bool {
+	prefix, baseModel := imagesModelParts(model)
+	baseModel = strings.ToLower(strings.TrimSpace(baseModel))
+	if baseModel != defaultXAIImagesModel && baseModel != xaiImagesQualityModel {
+		return false
+	}
+
+	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	return prefix == "" || prefix == "xai" || prefix == "x-ai" || prefix == "grok"
+}
 
 type imageCallResult struct {
 	Result        string

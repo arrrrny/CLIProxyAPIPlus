@@ -514,3 +514,12 @@ func finalizeCodexThinkingBlock(params *ConvertCodexResponseToClaudeParams) []by
 
 	return output
 }
+
+// shortenCodexCallIDIfNeeded truncates call IDs that exceed 64 characters
+// to avoid issues with strict ID length limits in Claude's tool_use format.
+func shortenCodexCallIDIfNeeded(id string) string {
+	if len(id) > 64 {
+		return id[:64]
+	}
+	return id
+}

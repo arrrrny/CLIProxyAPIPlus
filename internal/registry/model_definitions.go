@@ -7,6 +7,9 @@ import (
 )
 
 const codexBuiltinImageModelID = "gpt-image-2"
+const xaiBuiltinImageModelID = "grok-imagine-image"
+const xaiBuiltinImageQualityModelID = "grok-imagine-image-quality"
+const xaiBuiltinVideoModelID = "grok-imagine-video"
 
 // staticModelsJSON mirrors the top-level structure of models.json.
 type staticModelsJSON struct {
@@ -1212,45 +1215,4 @@ func GetAmazonQModels() []*ModelInfo {
 			MaxCompletionTokens: 64000,
 		},
 	}
-}
-
-// WithCodexBuiltins injects hard-coded Codex-only model definitions that should
-// not depend on remote models.json updates. Built-ins replace any matching IDs
-// already present in the provided slice.
-func WithCodexBuiltins(models []*ModelInfo) []*ModelInfo {
-	return upsertModelInfos(models, codexBuiltinImageModelInfo())
-}
-
-func codexBuiltinImageModelInfo() *ModelInfo {
-	return &ModelInfo{
-		ID:          codexBuiltinImageModelID,
-		Object:      "model",
-		Created:     1704067200, // 2024-01-01
-		OwnedBy:     "openai",
-		Type:        "openai",
-		DisplayName: "GPT Image 2",
-		Version:     codexBuiltinImageModelID,
-	}
-}
-
-func upsertModelInfos(models []*ModelInfo, extras ...*ModelInfo) []*ModelInfo {
-	if len(extras) == 0 {
-		return models
-	}
-
-	extraIDs := make(map[string]struct{}, len(extras))
-	for _, m := range extras {
-		if m != nil {
-			extraIDs[m.ID] = struct{}{}
-		}
-	}
-
-	out := make([]*ModelInfo, 0, len(models)+len(extras))
-	for _, m := range models {
-		if _, exists := extraIDs[m.ID]; !exists {
-			out = append(out, m)
-		}
-	}
-	out = append(out, extras...)
-	return out
 }

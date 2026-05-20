@@ -108,6 +108,7 @@ func main() {
 	var standalone bool
 	var noIncognito bool
 	var useIncognito bool
+	var homeJWT string
 	var localModel bool
 
 	// Define command-line flags for different operation modes.
@@ -143,6 +144,7 @@ func main() {
 	flag.StringVar(&password, "password", "", "")
 	flag.StringVar(&homeAddr, "home", "", "Home control plane address in host:port format (loads config from home and skips local config file)")
 	flag.StringVar(&homePassword, "home-password", "", "Home control plane password (Redis AUTH)")
+	flag.StringVar(&homeJWT, "home-jwt", "", "Home control plane JWT for mTLS certificate bootstrap and connection")
 	flag.BoolVar(&tuiMode, "tui", false, "Start with terminal management UI")
 	flag.BoolVar(&standalone, "standalone", false, "In TUI mode, start an embedded local server")
 	flag.BoolVar(&localModel, "local-model", false, "Use embedded model catalog only, skip remote model fetching")
