@@ -20,7 +20,7 @@ const (
 )
 
 var modelsURLs = []string{
-	"https://raw.githubusercontent.com/arrrrny/models/refs/heads/main/models.json",
+	"https://raw.githubusercontent.com/router-for-me/models/refs/heads/main/models.json",
 }
 
 //go:embed models/models.json
