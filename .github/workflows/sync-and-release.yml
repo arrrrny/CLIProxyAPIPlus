@@ -38,9 +38,9 @@ jobs:
           TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Merge upstream/main into plus
+      - name: Merge upstream/main into sync
         run: |
-          # Merge upstream/main into the current plus branch.
+          # Merge upstream/main into the current sync branch.
           # This incorporates upstream changes while preferring our changes in case of conflicts.
           git merge upstream/main -m "chore: sync with upstream/main" -X ours || {
             echo "Merge failed unexpectedly even with -X ours."
@@ -62,9 +62,9 @@ jobs:
           # Always allow release/tag creation if we are running the workflow
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-      - name: Push plus branch
+      - name: Push sync branch
         if: steps.check.outputs.has_changes == 'true'
-        run: git push origin plus
+        run: git push origin sync
 
       - name: Create release tag
         if: steps.check.outputs.has_changes == 'true'
@@ -77,4 +77,4 @@ jobs:
         run: |
           echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Action: Merged upstream/main into branch \`plus\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Merged upstream/main into branch \`sync\`" >> "$GITHUB_STEP_SUMMARY"
