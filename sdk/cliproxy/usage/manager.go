@@ -2,7 +2,6 @@ package usage
 
 import (
 	"context"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -12,23 +11,19 @@ import (
 
 // Record contains the usage statistics captured for a single provider request.
 type Record struct {
-	Provider  string
-	Model     string
-	Alias     string
-	APIKey    string
-	AuthID    string
-	AuthIndex string
-	AuthType  string
-	Source    string
-	// ReasoningEffort stores the client-requested thinking level for request event logs.
-	ReasoningEffort string
-	RequestedAt     time.Time
-	Latency         time.Duration
-	Failed          bool
-	Fail            Failure
-	Detail          Detail
-	// ResponseHeaders stores a snapshot of upstream response headers for usage sinks.
-	ResponseHeaders http.Header
+	Provider    string
+	Model       string
+	Alias       string
+	APIKey      string
+	AuthID      string
+	AuthIndex   string
+	AuthType    string
+	Source      string
+	RequestedAt time.Time
+	Latency     time.Duration
+	Failed      bool
+	Fail        Failure
+	Detail      Detail
 }
 
 // Failure holds HTTP failure metadata for an upstream request attempt.
@@ -79,7 +74,7 @@ func RequestedModelAliasFromContext(ctx context.Context) string {
 	}
 }
 
-// WithReasoningEffort stores the client-requested reasoning effort for usage sinks.
+// WithReasoningEffort stores the reasoning effort level in context.
 func WithReasoningEffort(ctx context.Context, effort string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
@@ -91,7 +86,7 @@ func WithReasoningEffort(ctx context.Context, effort string) context.Context {
 	return context.WithValue(ctx, reasoningEffortContextKey{}, effort)
 }
 
-// ReasoningEffortFromContext returns the client-requested reasoning effort stored in ctx.
+// ReasoningEffortFromContext returns the reasoning effort level stored in ctx.
 func ReasoningEffortFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""

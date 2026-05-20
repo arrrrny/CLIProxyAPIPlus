@@ -245,14 +245,20 @@ func convertOpenAIStreamingChunkToAnthropic(rawJSON []byte, param *ConvertOpenAI
 
 				// Handle function name and arguments
 				if function := toolCall.Get("function"); function.Exists() {
-					// Only record the name until content_block_start has been
-					// emitted. Some upstreams send "name": "" or repeat the
-					// field across chunks; reassigning after start could drift
-					// from what was already announced.
-					if !accumulator.StartEmitted {
-						if name := function.Get("name"); name.Exists() && name.Type == gjson.String && name.String() != "" {
-							accumulator.Name = util.MapToolName(param.ToolNameMap, name.String())
-						}
+					if name := function.Get("name"); name.Exists() && name.String() != "" {
+						accumulator.Name = util.MapToolName(param.ToolNameMap, name.String())
+
+						stopThinkingContentBlock(param, &results)
+
+						stopTextContentBlock(param, &results)
+
+						// Send content_block_start for tool_use
+						contentBlockStartJSON := `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"","name":"","input":{}}}`
+						contentBlockStartJSONBytes := []byte(contentBlockStartJSON)
+						contentBlockStartJSONBytes, _ = sjson.SetBytes(contentBlockStartJSONBytes, "index", param.toolContentBlockIndex(index))
+						contentBlockStartJSONBytes, _ = sjson.SetBytes(contentBlockStartJSONBytes, "content_block.id", util.SanitizeClaudeToolID(accumulator.ID))
+						contentBlockStartJSONBytes, _ = sjson.SetBytes(contentBlockStartJSONBytes, "content_block.name", accumulator.Name)
+						results = append(results, translatorcommon.AppendSSEEventBytes(nil, "content_block_start", contentBlockStartJSONBytes, 2))
 					}
 
 					// Handle function arguments

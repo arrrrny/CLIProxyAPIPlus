@@ -6,9 +6,7 @@
 package claude
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -362,23 +360,6 @@ func isFernetLikeReasoningSignature(signature string) bool {
 
 	ciphertextLen := len(decoded) - fernetVersionLen - fernetTimestamp - fernetIV - fernetHMAC
 	return ciphertextLen > 0 && ciphertextLen%aesBlockSize == 0
-}
-
-// shortenCodexCallIDIfNeeded keeps Claude tool IDs within the OpenAI Responses
-// API call_id limit while preserving a stable, low-collision mapping.
-func shortenCodexCallIDIfNeeded(id string) string {
-	const limit = 64
-	if len(id) <= limit {
-		return id
-	}
-
-	sum := sha256.Sum256([]byte(id))
-	suffix := "_" + hex.EncodeToString(sum[:8])
-	prefixLen := limit - len(suffix)
-	if prefixLen <= 0 {
-		return suffix[len(suffix)-limit:]
-	}
-	return id[:prefixLen] + suffix
 }
 
 func isClaudeWebSearchToolType(toolType string) bool {

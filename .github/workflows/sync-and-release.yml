@@ -1,0 +1,80 @@
+name: Daily Sync & Release
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLIPROXY_SYNC }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Save workflow file
+        run: |
+          cp .github/workflows/sync-and-release.yml /tmp/sync-and-release.yml
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/router-for-me/CLIProxyAPI.git
+          git fetch upstream --tags --force
+          git fetch upstream main
+
+      - name: Get latest upstream tag
+        id: upstream
+        run: |
+          TAG=$(git ls-remote --tags --sort=-v:refname upstream 'v*' | head -1 | sed 's|.*refs/tags/||')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Merge upstream/main into plus
+        run: |
+          # Merge upstream/main into the current plus branch.
+          # This incorporates upstream changes while preferring our changes in case of conflicts.
+          git merge upstream/main -m "chore: sync with upstream/main" -X ours || {
+            echo "Merge failed unexpectedly even with -X ours."
+            exit 1
+          }
+
+      - name: Restore sync-and-release workflow
+        run: |
+          mkdir -p .github/workflows
+          cp /tmp/sync-and-release.yml .github/workflows/sync-and-release.yml
+          git add .github/workflows/sync-and-release.yml
+          if ! git diff --cached --quiet; then
+            git commit -m "ci: restore sync-and-release workflow"
+          fi
+
+      - name: Check for changes to push
+        id: check
+        run: |
+          # Always allow release/tag creation if we are running the workflow
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push plus branch
+        if: steps.check.outputs.has_changes == 'true'
+        run: git push origin plus
+
+      - name: Create release tag
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git tag -f "${{ steps.upstream.outputs.tag }}" HEAD
+          git push origin "${{ steps.upstream.outputs.tag }}" --force
+
+      - name: Summary
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          echo "### Sync & Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Upstream tag: \`${{ steps.upstream.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Action: Merged upstream/main into branch \`plus\`" >> "$GITHUB_STEP_SUMMARY"

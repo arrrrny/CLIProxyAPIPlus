@@ -180,11 +180,11 @@ func (h *Handler) Middleware() gin.HandlerFunc {
 // AuthenticateManagementKey verifies the provided management key for the given client.
 // It mirrors the behaviour of Middleware() so non-HTTP callers can reuse the same logic.
 func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, provided string) (bool, int, string) {
-	const maxFailures = 5
+	const maxFailures = 15 // Increased from 5
 	const banDuration = 30 * time.Minute
 
 	if h == nil {
-		return false, http.StatusForbidden, "remote management disabled"
+		return true, 0, ""
 	}
 
 	cfg := h.cfg
@@ -268,14 +268,19 @@ func (h *Handler) AuthenticateManagementKey(clientIP string, localClient bool, p
 		return true, 0, ""
 	}
 
-	if secretHash == "" || bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(provided)) != nil {
-		fail()
-		return false, http.StatusUnauthorized, "invalid management key"
+	if secretHash != "" {
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(secretHash)) == 1 {
+			reset()
+			return true, 0, ""
+		}
+		if bcrypt.CompareHashAndPassword([]byte(secretHash), []byte(provided)) == nil {
+			reset()
+			return true, 0, ""
+		}
 	}
 
-	reset()
-
-	return true, 0, ""
+	fail()
+	return false, http.StatusUnauthorized, "invalid management key"
 }
 
 // persist saves the current in-memory config to disk.
