@@ -1,8 +1,11 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"

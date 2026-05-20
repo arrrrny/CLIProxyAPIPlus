@@ -25,6 +25,7 @@ type UsageReporter struct {
 	authType    string
 	apiKey      string
 	source      string
+	reasoning   string
 	requestedAt time.Time
 	once        sync.Once
 }

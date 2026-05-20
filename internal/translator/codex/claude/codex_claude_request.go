@@ -50,7 +50,7 @@ func ConvertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool) 
 		contentIndex := 0
 
 		appendSystemText := func(text string) {
-			if text == "" || strings.HasPrefix(text, "x-anthropic-billing-header: ") {
+			if text == "" || util.IsClaudeCodeAttributionSystemText(text) {
 				return
 			}
 
@@ -172,7 +172,7 @@ func ConvertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool) 
 					case "tool_use":
 						flushMessage()
 						functionCallMessage := []byte(`{"type":"function_call"}`)
-						functionCallMessage, _ = sjson.SetBytes(functionCallMessage, "call_id", messageContentResult.Get("id").String())
+						functionCallMessage, _ = sjson.SetBytes(functionCallMessage, "call_id", shortenCodexCallIDIfNeeded(messageContentResult.Get("id").String()))
 						{
 							name := messageContentResult.Get("name").String()
 							if short, ok := toolNameMap[name]; ok {
@@ -187,7 +187,7 @@ func ConvertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool) 
 					case "tool_result":
 						flushMessage()
 						functionCallOutputMessage := []byte(`{"type":"function_call_output"}`)
-						functionCallOutputMessage, _ = sjson.SetBytes(functionCallOutputMessage, "call_id", messageContentResult.Get("tool_use_id").String())
+						functionCallOutputMessage, _ = sjson.SetBytes(functionCallOutputMessage, "call_id", shortenCodexCallIDIfNeeded(messageContentResult.Get("tool_use_id").String()))
 
 						contentResult := messageContentResult.Get("content")
 						if contentResult.IsArray() {

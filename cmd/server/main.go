@@ -229,6 +229,13 @@ func main() {
 		return "", false
 	}
 	writableBase := util.WritablePath()
+
+	if strings.TrimSpace(homeJWT) == "" {
+		if v, ok := lookupEnv("HOME_JWT", "home_jwt"); ok {
+			homeJWT = v
+		}
+	}
+
 	if value, ok := lookupEnv("PGSTORE_DSN", "pgstore_dsn"); ok {
 		usePostgresStore = true
 		pgStoreDSN = value

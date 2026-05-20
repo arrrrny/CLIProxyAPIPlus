@@ -103,7 +103,7 @@ func ConvertClaudeRequestToOpenAI(modelName string, inputRawJSON []byte, stream 
 	hasSystemContent := false
 	if system := root.Get("system"); system.Exists() {
 		if system.Type == gjson.String {
-			if system.String() != "" {
+			if system.String() != "" && !util.IsClaudeCodeAttributionSystemText(system.String()) {
 				oldSystem := []byte(`{"type":"text","text":""}`)
 				oldSystem, _ = sjson.SetBytes(oldSystem, "text", system.String())
 				systemMsgJSON, _ = sjson.SetRawBytes(systemMsgJSON, "content.-1", oldSystem)
@@ -334,7 +334,7 @@ func convertClaudeContentPart(part gjson.Result) (string, bool) {
 	switch partType {
 	case "text":
 		text := part.Get("text").String()
-		if strings.TrimSpace(text) == "" {
+		if strings.TrimSpace(text) == "" || util.IsClaudeCodeAttributionSystemText(text) {
 			return "", false
 		}
 		textContent := []byte(`{"type":"text","text":""}`)

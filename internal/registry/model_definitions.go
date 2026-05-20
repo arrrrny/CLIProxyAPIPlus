@@ -21,6 +21,7 @@ type staticModelsJSON struct {
 	CodexPro    []*ModelInfo `json:"codex-pro"`
 	Kimi        []*ModelInfo `json:"kimi"`
 	Antigravity []*ModelInfo `json:"antigravity"`
+	XAI         []*ModelInfo `json:"xai"`
 }
 
 // GetClaudeModels returns the standard Claude model definitions.
@@ -269,6 +270,121 @@ func GetCodeBuddyModels() []*ModelInfo {
 			SupportedEndpoints:  []string{"/chat/completions"},
 		},
 	}
+}
+
+// GetXAIModels returns the standard xAI Grok model definitions.
+func GetXAIModels() []*ModelInfo {
+	return WithXAIBuiltins(cloneModelInfos(getModels().XAI))
+}
+
+// WithCodexBuiltins injects hard-coded Codex-only model definitions that should
+// not depend on remote models.json updates. Built-ins replace any matching IDs
+// already present in the provided slice.
+func WithCodexBuiltins(models []*ModelInfo) []*ModelInfo {
+	return upsertModelInfos(models, codexBuiltinImageModelInfo())
+}
+
+// WithXAIBuiltins injects hard-coded xAI image/video model definitions that should
+// not depend on remote models.json updates.
+func WithXAIBuiltins(models []*ModelInfo) []*ModelInfo {
+	return upsertModelInfos(models, xaiBuiltinImageModelInfo(), xaiBuiltinImageQualityModelInfo(), xaiBuiltinVideoModelInfo())
+}
+
+func codexBuiltinImageModelInfo() *ModelInfo {
+	return &ModelInfo{
+		ID:          codexBuiltinImageModelID,
+		Object:      "model",
+		Created:     1704067200, // 2024-01-01
+		OwnedBy:     "openai",
+		Type:        "openai",
+		DisplayName: "GPT Image 2",
+		Version:     codexBuiltinImageModelID,
+	}
+}
+
+func xaiBuiltinImageModelInfo() *ModelInfo {
+	return &ModelInfo{
+		ID:          xaiBuiltinImageModelID,
+		Object:      "model",
+		Created:     1735689600, // 2025-01-01
+		OwnedBy:     "xai",
+		Type:        "xai",
+		DisplayName: "Grok Imagine Image",
+		Name:        xaiBuiltinImageModelID,
+		Description: "xAI Grok image generation model.",
+	}
+}
+
+func xaiBuiltinImageQualityModelInfo() *ModelInfo {
+	return &ModelInfo{
+		ID:          xaiBuiltinImageQualityModelID,
+		Object:      "model",
+		Created:     1735689600, // 2025-01-01
+		OwnedBy:     "xai",
+		Type:        "xai",
+		DisplayName: "Grok Imagine Image Quality",
+		Name:        xaiBuiltinImageQualityModelID,
+		Description: "xAI Grok higher-fidelity image generation model.",
+	}
+}
+
+func xaiBuiltinVideoModelInfo() *ModelInfo {
+	return &ModelInfo{
+		ID:          xaiBuiltinVideoModelID,
+		Object:      "model",
+		Created:     1735689600, // 2025-01-01
+		OwnedBy:     "xai",
+		Type:        "xai",
+		DisplayName: "Grok Imagine Video",
+		Name:        xaiBuiltinVideoModelID,
+		Description: "xAI Grok video generation model.",
+	}
+}
+
+func upsertModelInfos(models []*ModelInfo, extras ...*ModelInfo) []*ModelInfo {
+	if len(extras) == 0 {
+		return models
+	}
+
+	extraIDs := make(map[string]struct{}, len(extras))
+	extraList := make([]*ModelInfo, 0, len(extras))
+	for _, extra := range extras {
+		if extra == nil {
+			continue
+		}
+		id := strings.TrimSpace(extra.ID)
+		if id == "" {
+			continue
+		}
+		key := strings.ToLower(id)
+		if _, exists := extraIDs[key]; exists {
+			continue
+		}
+		extraIDs[key] = struct{}{}
+		extraList = append(extraList, cloneModelInfo(extra))
+	}
+
+	if len(extraList) == 0 {
+		return models
+	}
+
+	filtered := make([]*ModelInfo, 0, len(models)+len(extraList))
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+		id := strings.TrimSpace(model.ID)
+		if id == "" {
+			continue
+		}
+		if _, exists := extraIDs[strings.ToLower(id)]; exists {
+			continue
+		}
+		filtered = append(filtered, model)
+	}
+
+	filtered = append(filtered, extraList...)
+	return filtered
 }
 
 // cloneModelInfos returns a shallow copy of the slice with each element deep-cloned.
