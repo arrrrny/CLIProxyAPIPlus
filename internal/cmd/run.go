@@ -30,14 +30,14 @@ func StartService(cfg *config.Config, configPath string, localPassword string) {
 		WithConfigPath(configPath).
 		WithLocalManagementPassword(localPassword)
 
-	ctxSignal, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctxSignal, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 
 	runCtx := ctxSignal
 	if localPassword != "" {
 		var keepAliveCancel context.CancelFunc
 		runCtx, keepAliveCancel = context.WithCancel(ctxSignal)
-		builder = builder.WithServerOptions(api.WithKeepAliveEndpoint(10*time.Second, func() {
+		builder = builder.WithServerOptions(api.WithKeepAliveEndpoint(60*time.Second, func() {
 			log.Warn("keep-alive endpoint idle for 10s, shutting down")
 			keepAliveCancel()
 		}))
@@ -64,6 +64,7 @@ func StartServiceBackground(cfg *config.Config, configPath string, localPassword
 		WithLocalManagementPassword(localPassword)
 
 	ctx, cancelFn := context.WithCancel(context.Background())
+	ctxSignal, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	doneCh := make(chan struct{})
 
 	service, err := builder.Build()
@@ -75,7 +76,20 @@ func StartServiceBackground(cfg *config.Config, configPath string, localPassword
 
 	go func() {
 		defer close(doneCh)
-		if err := service.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+
+		// Create a combined context that cancels when either context or signals cancel
+		runCtx, runCancel := context.WithCancel(ctx)
+		defer runCancel()
+
+		go func() {
+			select {
+			case <-ctx.Done():
+			case <-ctxSignal.Done():
+				runCancel()
+			}
+		}()
+
+		if err := service.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Errorf("proxy service exited with error: %v", err)
 		}
 	}()

@@ -21,7 +21,6 @@ var aiAPIPrefixes = []string{
 	"/v1/chat/completions",
 	"/v1/completions",
 	"/v1/images",
-	"/v1/videos",
 	"/v1/messages",
 	"/v1/responses",
 	"/v1beta/models/",

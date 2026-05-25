@@ -231,17 +231,6 @@ func requestExecutionMetadata(ctx context.Context) map[string]any {
 	return meta
 }
 
-func setReasoningEffortMetadata(meta map[string]any, handlerType, model string, rawJSON []byte) {
-	if meta == nil {
-		return
-	}
-	effort := thinking.ExtractReasoningEffort(rawJSON, handlerType, model)
-	if effort == "" {
-		return
-	}
-	meta[coreexecutor.ReasoningEffortMetadataKey] = effort
-}
-
 // headersFromContext extracts the original HTTP request headers from the gin context
 // embedded in the provided context. This allows session affinity selectors to read
 // client headers like X-Amp-Thread-Id.
@@ -325,10 +314,11 @@ type BaseAPIHandler struct {
 // Returns:
 //   - *BaseAPIHandler: A new API handlers instance
 func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *BaseAPIHandler {
-	return &BaseAPIHandler{
+	h := &BaseAPIHandler{
 		Cfg:         cfg,
 		AuthManager: authManager,
 	}
+	return h
 }
 
 // UpdateClients updates the handlers' client list and configuration.
@@ -411,7 +401,6 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 		newCtx = logging.WithEndpoint(newCtx, endpoint)
 	}
 	newCtx = logging.WithResponseStatusHolder(newCtx)
-	newCtx = logging.WithResponseHeadersHolder(newCtx)
 
 	cancelCtx := newCtx
 	if requestCtx != nil && requestCtx != parentCtx {
@@ -561,7 +550,6 @@ func (h *BaseAPIHandler) executeWithAuthManager(ctx context.Context, handlerType
 	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
-	setReasoningEffortMetadata(reqMeta, handlerType, normalizedModel, rawJSON)
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -610,7 +598,6 @@ func (h *BaseAPIHandler) ExecuteCountWithAuthManager(ctx context.Context, handle
 	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
-	setReasoningEffortMetadata(reqMeta, handlerType, normalizedModel, rawJSON)
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -672,7 +659,6 @@ func (h *BaseAPIHandler) executeStreamWithAuthManager(ctx context.Context, handl
 	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
-	setReasoningEffortMetadata(reqMeta, handlerType, normalizedModel, rawJSON)
 	payload := rawJSON
 	if len(payload) == 0 {
 		payload = nil
@@ -908,10 +894,10 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 	parsed := thinking.ParseSuffix(resolvedModelName)
 	baseModel := strings.TrimSpace(parsed.ModelName)
 
-	if strings.EqualFold(routeModelBaseName(baseModel), "gpt-image-2") && !allowImageModel {
+	if strings.EqualFold(baseModel, "gpt-image-2") {
 		return nil, "", &interfaces.ErrorMessage{
 			StatusCode: http.StatusServiceUnavailable,
-			Error:      fmt.Errorf("model %s is only supported on /v1/images/generations and /v1/images/edits", routeModelBaseName(baseModel)),
+			Error:      fmt.Errorf("model %s is only supported on /v1/images/generations and /v1/images/edits", baseModel),
 		}
 	}
 

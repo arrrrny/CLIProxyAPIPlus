@@ -10,14 +10,17 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 	configaccess "github.com/router-for-me/CLIProxyAPI/v7/internal/access/config_access"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/kiro"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cmd"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
@@ -51,6 +54,19 @@ func init() {
 	buildinfo.BuildDate = BuildDate
 }
 
+// setKiroIncognitoMode sets the incognito browser mode for Kiro authentication.
+// Kiro defaults to incognito mode for multi-account support.
+// Users can explicitly override with --incognito or --no-incognito flags.
+func setKiroIncognitoMode(cfg *config.Config, useIncognito, noIncognito bool) {
+	if useIncognito {
+		cfg.IncognitoBrowser = true
+	} else if noIncognito {
+		cfg.IncognitoBrowser = false
+	} else {
+		cfg.IncognitoBrowser = true // Kiro default
+	}
+}
+
 // main is the entry point of the application.
 // It parses command-line flags, loads configuration, and starts the appropriate
 // service based on the provided flags (login, codex-login, or server mode).
@@ -62,20 +78,37 @@ func main() {
 	var codexLogin bool
 	var codexDeviceLogin bool
 	var claudeLogin bool
+	var kiloLogin bool
+	var gitlabLogin bool
+	var gitlabTokenLogin bool
 	var noBrowser bool
 	var oauthCallbackPort int
 	var antigravityLogin bool
 	var kimiLogin bool
-	var xaiLogin bool
+	var cursorLogin bool
+	var kiroLogin bool
+	var kiroGoogleLogin bool
+	var kiroAWSLogin bool
+	var kiroAWSAuthCode bool
+	var kiroImport bool
+	var kiroIDCLogin bool
+	var kiroIDCStartURL string
+	var kiroIDCRegion string
+	var kiroIDCFlow string
+	var githubCopilotLogin bool
+	var codeBuddyLogin bool
 	var projectID string
 	var vertexImport string
 	var vertexImportPrefix string
 	var configPath string
 	var password string
-	var homeJWT string
-	var homeDisableClusterDiscovery bool
+	var homeAddr string
+	var homePassword string
 	var tuiMode bool
 	var standalone bool
+	var noIncognito bool
+	var useIncognito bool
+	var homeJWT string
 	var localModel bool
 
 	// Define command-line flags for different operation modes.
@@ -83,18 +116,35 @@ func main() {
 	flag.BoolVar(&codexLogin, "codex-login", false, "Login to Codex using OAuth")
 	flag.BoolVar(&codexDeviceLogin, "codex-device-login", false, "Login to Codex using device code flow")
 	flag.BoolVar(&claudeLogin, "claude-login", false, "Login to Claude using OAuth")
+	flag.BoolVar(&kiloLogin, "kilo-login", false, "Login to Kilo AI using device flow")
+	flag.BoolVar(&gitlabLogin, "gitlab-login", false, "Login to GitLab Duo using OAuth")
+	flag.BoolVar(&gitlabTokenLogin, "gitlab-token-login", false, "Login to GitLab Duo using a personal access token")
 	flag.BoolVar(&noBrowser, "no-browser", false, "Don't open browser automatically for OAuth")
 	flag.IntVar(&oauthCallbackPort, "oauth-callback-port", 0, "Override OAuth callback port (defaults to provider-specific port)")
+	flag.BoolVar(&useIncognito, "incognito", false, "Open browser in incognito/private mode for OAuth (useful for multiple accounts)")
+	flag.BoolVar(&noIncognito, "no-incognito", false, "Force disable incognito mode (uses existing browser session)")
 	flag.BoolVar(&antigravityLogin, "antigravity-login", false, "Login to Antigravity using OAuth")
 	flag.BoolVar(&kimiLogin, "kimi-login", false, "Login to Kimi using OAuth")
-	flag.BoolVar(&xaiLogin, "xai-login", false, "Login to xAI using OAuth")
+	flag.BoolVar(&cursorLogin, "cursor-login", false, "Login to Cursor using OAuth")
+	flag.BoolVar(&kiroLogin, "kiro-login", false, "Login to Kiro using Google OAuth")
+	flag.BoolVar(&kiroGoogleLogin, "kiro-google-login", false, "Login to Kiro using Google OAuth (same as --kiro-login)")
+	flag.BoolVar(&kiroAWSLogin, "kiro-aws-login", false, "Login to Kiro using AWS Builder ID (device code flow)")
+	flag.BoolVar(&kiroAWSAuthCode, "kiro-aws-authcode", false, "Login to Kiro using AWS Builder ID (authorization code flow, better UX)")
+	flag.BoolVar(&kiroImport, "kiro-import", false, "Import Kiro token from Kiro IDE (~/.aws/sso/cache/kiro-auth-token.json)")
+	flag.BoolVar(&kiroIDCLogin, "kiro-idc-login", false, "Login to Kiro using IAM Identity Center (IDC)")
+	flag.StringVar(&kiroIDCStartURL, "kiro-idc-start-url", "", "IDC start URL (required with --kiro-idc-login)")
+	flag.StringVar(&kiroIDCRegion, "kiro-idc-region", "", "IDC region (default: us-east-1)")
+	flag.StringVar(&kiroIDCFlow, "kiro-idc-flow", "", "IDC flow type: authcode (default) or device")
+	flag.BoolVar(&githubCopilotLogin, "github-copilot-login", false, "Login to GitHub Copilot using device flow")
+	flag.BoolVar(&codeBuddyLogin, "codebuddy-login", false, "Login to CodeBuddy using browser OAuth flow")
 	flag.StringVar(&projectID, "project_id", "", "Project ID (Gemini only, not required)")
 	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
 	flag.StringVar(&vertexImport, "vertex-import", "", "Import Vertex service account key JSON file")
 	flag.StringVar(&vertexImportPrefix, "vertex-import-prefix", "", "Prefix for Vertex model namespacing (use with -vertex-import)")
 	flag.StringVar(&password, "password", "", "")
+	flag.StringVar(&homeAddr, "home", "", "Home control plane address in host:port format (loads config from home and skips local config file)")
+	flag.StringVar(&homePassword, "home-password", "", "Home control plane password (Redis AUTH)")
 	flag.StringVar(&homeJWT, "home-jwt", "", "Home control plane JWT for mTLS certificate bootstrap and connection")
-	flag.BoolVar(&homeDisableClusterDiscovery, "home-disable-cluster-discovery", false, "Disable Home CLUSTER NODES discovery and keep using the configured -home-jwt address")
 	flag.BoolVar(&tuiMode, "tui", false, "Start with terminal management UI")
 	flag.BoolVar(&standalone, "standalone", false, "In TUI mode, start an embedded local server")
 	flag.BoolVar(&localModel, "local-model", false, "Use embedded model catalog only, skip remote model fetching")
@@ -251,24 +301,37 @@ func main() {
 	// Determine and load the configuration file.
 	// Prefer the Postgres store when configured, otherwise fallback to git or local files.
 	var configFilePath string
-	if strings.TrimSpace(homeJWT) != "" {
+	if strings.TrimSpace(homeAddr) != "" {
 		configLoadedFromHome = true
-		ctxHome, cancelHome := context.WithTimeout(context.Background(), 30*time.Second)
-		homeCfg, errHomeCfg := home.ConfigFromJWT(ctxHome, homeJWT)
-		cancelHome()
-		if errHomeCfg != nil {
-			log.Errorf("invalid -home-jwt: %v", errHomeCfg)
+		trimmedHomePassword := strings.TrimSpace(homePassword)
+		host, portStr, errSplit := net.SplitHostPort(strings.TrimSpace(homeAddr))
+		if errSplit != nil {
+			log.Errorf("invalid -home address %q (expected host:port): %v", homeAddr, errSplit)
 			return
 		}
-		if homeDisableClusterDiscovery {
-			homeCfg.DisableClusterDiscovery = true
+		host = strings.TrimSpace(host)
+		if host == "" {
+			log.Errorf("invalid -home address %q: host is empty", homeAddr)
+			return
+		}
+		port, errPort := strconv.Atoi(strings.TrimSpace(portStr))
+		if errPort != nil || port <= 0 {
+			log.Errorf("invalid -home address %q: invalid port %q", homeAddr, portStr)
+			return
+		}
+
+		homeCfg := config.HomeConfig{
+			Enabled:  true,
+			Host:     host,
+			Port:     port,
+			Password: trimmedHomePassword,
 		}
 		homeClient := home.New(homeCfg)
 		defer homeClient.Close()
 
-		ctxHomeConfig, cancelHomeConfig := context.WithTimeout(context.Background(), 30*time.Second)
-		raw, errGetConfig := homeClient.GetConfig(ctxHomeConfig)
-		cancelHomeConfig()
+		ctxHome, cancelHome := context.WithTimeout(context.Background(), 30*time.Second)
+		raw, errGetConfig := homeClient.GetConfig(ctxHome)
+		cancelHome()
 		if errGetConfig != nil {
 			log.Errorf("failed to fetch config from home: %v", errGetConfig)
 			return
@@ -537,6 +600,12 @@ func main() {
 	} else if antigravityLogin {
 		// Handle Antigravity login
 		cmd.DoAntigravityLogin(cfg, options)
+	} else if githubCopilotLogin {
+		// Handle GitHub Copilot login
+		cmd.DoGitHubCopilotLogin(cfg, options)
+	} else if codeBuddyLogin {
+		// Handle CodeBuddy login
+		cmd.DoCodeBuddyLogin(cfg, options)
 	} else if codexLogin {
 		// Handle Codex login
 		cmd.DoCodexLogin(cfg, options)
@@ -546,10 +615,50 @@ func main() {
 	} else if claudeLogin {
 		// Handle Claude login
 		cmd.DoClaudeLogin(cfg, options)
+	} else if kiloLogin {
+		cmd.DoKiloLogin(cfg, options)
+	} else if gitlabLogin {
+		cmd.DoGitLabLogin(cfg, options)
+	} else if gitlabTokenLogin {
+		cmd.DoGitLabTokenLogin(cfg, options)
 	} else if kimiLogin {
 		cmd.DoKimiLogin(cfg, options)
-	} else if xaiLogin {
-		cmd.DoXAILogin(cfg, options)
+	} else if cursorLogin {
+		cmd.DoCursorLogin(cfg, options)
+	} else if kiroLogin {
+		// For Kiro auth, default to incognito mode for multi-account support
+		// Users can explicitly override with --no-incognito
+		// Note: This config mutation is safe - auth commands exit after completion
+		// and don't share config with StartService (which is in the else branch)
+		setKiroIncognitoMode(cfg, useIncognito, noIncognito)
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroLogin(cfg, options)
+	} else if kiroGoogleLogin {
+		// For Kiro auth, default to incognito mode for multi-account support
+		// Users can explicitly override with --no-incognito
+		// Note: This config mutation is safe - auth commands exit after completion
+		setKiroIncognitoMode(cfg, useIncognito, noIncognito)
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroGoogleLogin(cfg, options)
+	} else if kiroAWSLogin {
+		// For Kiro auth, default to incognito mode for multi-account support
+		// Users can explicitly override with --no-incognito
+		setKiroIncognitoMode(cfg, useIncognito, noIncognito)
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroAWSLogin(cfg, options)
+	} else if kiroAWSAuthCode {
+		// For Kiro auth with authorization code flow (better UX)
+		setKiroIncognitoMode(cfg, useIncognito, noIncognito)
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroAWSAuthCodeLogin(cfg, options)
+	} else if kiroImport {
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroImport(cfg, options)
+	} else if kiroIDCLogin {
+		// For Kiro IDC auth, default to incognito mode for multi-account support
+		setKiroIncognitoMode(cfg, useIncognito, noIncognito)
+		kiro.InitFingerprintConfig(cfg)
+		cmd.DoKiroIDCLogin(cfg, options, kiroIDCStartURL, kiroIDCRegion, kiroIDCFlow)
 	} else {
 		// In cloud deploy mode without config file, just wait for shutdown signals
 		if isCloudDeploy && !configFileExists {
@@ -648,6 +757,12 @@ func main() {
 			} else if cfg.Home.Enabled {
 				log.Info("Home mode: remote model updates disabled")
 			}
+
+			if cfg.AuthDir != "" {
+				kiro.InitializeAndStart(cfg.AuthDir, cfg)
+				defer kiro.StopGlobalRefreshManager()
+			}
+
 			cmd.StartService(cfg, configFilePath, password)
 		}
 	}

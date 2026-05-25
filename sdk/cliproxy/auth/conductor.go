@@ -73,11 +73,9 @@ const (
 	refreshCheckInterval  = 5 * time.Second
 	refreshMaxConcurrency = 16
 	refreshPendingBackoff = time.Minute
-	refreshFailureBackoff = 5 * time.Minute
+	refreshFailureBackoff = 1 * time.Minute
 	// refreshIneffectiveBackoff throttles refresh attempts when an executor returns
-	// success but the auth still evaluates as needing refresh (e.g. token expiry
-	// wasn't updated). Without this guard, the auto-refresh loop can tight-loop and
-	// burn CPU at idle.
+	// a nil auth update with no error (indicating no change was possible/needed).
 	refreshIneffectiveBackoff = 30 * time.Second
 	quotaBackoffBase          = time.Second
 	quotaBackoffMax           = 30 * time.Minute
@@ -1246,15 +1244,12 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
 			return cliproxyexecutor.Response{}, errWait
 		}
 	}
-	if lastErr != nil {
-		if hasAntigravityProvider(normalized) && shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-			if resp, ok := m.tryAntigravityCreditsExecute(ctx, req, opts); ok {
-				return resp, nil
-			}
+	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
+		if resp, ok := m.tryAntigravityCreditsExecute(ctx, req, opts); ok {
+			return resp, nil
 		}
-		return cliproxyexecutor.Response{}, lastErr
 	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cliproxyexecutor.Response{}, lastErr
 }
 
 // It supports multiple providers for the same model and round-robins the starting provider per model.
@@ -1281,10 +1276,7 @@ func (m *Manager) ExecuteCount(ctx context.Context, providers []string, req clip
 			return cliproxyexecutor.Response{}, errWait
 		}
 	}
-	if lastErr != nil {
-		return cliproxyexecutor.Response{}, lastErr
-	}
-	return cliproxyexecutor.Response{}, &Error{Code: "auth_not_found", Message: "no auth available"}
+	return cliproxyexecutor.Response{}, lastErr
 }
 
 // ExecuteStream performs a streaming execution using the configured selector and executor.
@@ -1312,19 +1304,16 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
 			return nil, errWait
 		}
 	}
-	if lastErr != nil {
-		if hasAntigravityProvider(normalized) && shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-			if result, ok := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); ok {
-				return result, nil
-			}
+	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
+		if result, ok := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); ok {
+			return result, nil
 		}
-		var bootstrapErr *streamBootstrapError
-		if errors.As(lastErr, &bootstrapErr) && bootstrapErr != nil {
-			return streamErrorResult(bootstrapErr.Headers(), bootstrapErr.cause), nil
-		}
-		return nil, lastErr
 	}
-	return nil, &Error{Code: "auth_not_found", Message: "no auth available"}
+	var bootstrapErr *streamBootstrapError
+	if errors.As(lastErr, &bootstrapErr) && bootstrapErr != nil {
+		return streamErrorResult(bootstrapErr.Headers(), bootstrapErr.cause), nil
+	}
+	return nil, lastErr
 }
 
 func (m *Manager) executeMixedOnce(ctx context.Context, providers []string, req cliproxyexecutor.Request, opts cliproxyexecutor.Options, maxRetryCredentials int) (cliproxyexecutor.Response, error) {
@@ -1737,6 +1726,24 @@ func contextWithRequestedModelAlias(ctx context.Context, opts cliproxyexecutor.O
 	return ctx
 }
 
+func reasoningEffortFromOptions(opts cliproxyexecutor.Options) string {
+	if len(opts.Metadata) == 0 {
+		return ""
+	}
+	raw, ok := opts.Metadata[cliproxyexecutor.ReasoningEffortMetadataKey]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch value := raw.(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case []byte:
+		return strings.TrimSpace(string(value))
+	default:
+		return ""
+	}
+}
+
 func requestedModelAliasFromOptions(opts cliproxyexecutor.Options, fallback string) string {
 	fallback = strings.TrimSpace(fallback)
 	if len(opts.Metadata) == 0 {
@@ -1759,24 +1766,6 @@ func requestedModelAliasFromOptions(opts cliproxyexecutor.Options, fallback stri
 		return strings.TrimSpace(string(value))
 	default:
 		return fallback
-	}
-}
-
-func reasoningEffortFromOptions(opts cliproxyexecutor.Options) string {
-	if len(opts.Metadata) == 0 {
-		return ""
-	}
-	raw, ok := opts.Metadata[cliproxyexecutor.ReasoningEffortMetadataKey]
-	if !ok || raw == nil {
-		return ""
-	}
-	switch value := raw.(type) {
-	case string:
-		return strings.TrimSpace(value)
-	case []byte:
-		return strings.TrimSpace(string(value))
-	default:
-		return ""
 	}
 }
 
@@ -2758,6 +2747,8 @@ func isRequestInvalidError(err error) bool {
 		msg := err.Error()
 		return strings.Contains(msg, "\"status\":\"UNKNOWN\"") ||
 			strings.Contains(msg, "\"status\": \"UNKNOWN\"")
+	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+		return true
 	default:
 		return false
 	}
@@ -4196,7 +4187,9 @@ func (m *Manager) refreshAuth(ctx context.Context, id string) {
 		updated.Runtime = auth.Runtime
 	}
 	updated.LastRefreshedAt = now
-	updated.NextRefreshAfter = time.Time{}
+	// Preserve NextRefreshAfter set by the Authenticator
+	// If the Authenticator set a reasonable refresh time, it should not be overwritten
+	// If the Authenticator did not set it (zero value), shouldRefresh will use default logic
 	updated.LastError = nil
 	updated.UpdatedAt = now
 	if m.shouldRefresh(updated, now) {
