@@ -24,22 +24,22 @@ func ConvertOpenAIRequestToOpenAI(modelName string, inputRawJSON []byte, _ bool)
 		return inputRawJSON
 	}
 
-	updatedJSON = normalizeAssistantMessages(updatedJSON)
+	updatedJSON = normalizeMessages(updatedJSON)
 
 	return updatedJSON
 }
 
-// normalizeAssistantMessages fixes two common problems that strict upstreams
-// (e.g. DeepSeek) reject in multi-turn conversation history:
+// normalizeMessages fixes common problems that strict upstreams (e.g. DeepSeek,
+// Crucible via OpenRouter) reject in multi-turn conversation history:
 //
-//  1. content is null or missing — happens when a streaming tool call is
-//     cancelled mid-flight; the client stores the partial assistant message
-//     with content: null. DeepSeek requires content to be a string or array.
+//  1. content is null or missing on ANY message role — happens when a streaming
+//     tool call is cancelled mid-flight; the client stores the partial assistant
+//     message with content: null. Providers require content to be a string or array.
 //
-//  2. reasoning_content is absent — reasoning-aware models (e.g. DeepSeek R1)
-//     require the field to be present in every assistant message for multi-turn
-//     conversations; clients typically drop it when replaying history.
-func normalizeAssistantMessages(body []byte) []byte {
+//  2. reasoning_content is absent on assistant messages — reasoning-aware models
+//     (e.g. DeepSeek R1) require the field to be present in every assistant message
+//     for multi-turn conversations; clients typically drop it when replaying history.
+func normalizeMessages(body []byte) []byte {
 	msgs := gjson.GetBytes(body, "messages")
 	if !msgs.Exists() || !msgs.IsArray() {
 		return body
@@ -47,13 +47,11 @@ func normalizeAssistantMessages(body []byte) []byte {
 
 	result := body
 	msgs.ForEach(func(key, value gjson.Result) bool {
-		if value.Get("role").String() != "assistant" {
-			return true
-		}
-
 		idx := key.Int()
+		role := value.Get("role").String()
 
-		// Fix 1: null or missing content → ""
+		// Fix 1: null or missing content → "" for ALL message roles.
+		// Any role can end up with null content after a cancelled stream.
 		content := value.Get("content")
 		if !content.Exists() || content.Type == gjson.Null {
 			path := fmt.Sprintf("messages.%d.content", idx)
@@ -62,8 +60,8 @@ func normalizeAssistantMessages(body []byte) []byte {
 			}
 		}
 
-		// Fix 2: missing reasoning_content → ""
-		if !value.Get("reasoning_content").Exists() {
+		// Fix 2: missing reasoning_content → "" for assistant messages only.
+		if role == "assistant" && !value.Get("reasoning_content").Exists() {
 			path := fmt.Sprintf("messages.%d.reasoning_content", idx)
 			if next, setErr := sjson.SetBytes(result, path, ""); setErr == nil {
 				result = next
