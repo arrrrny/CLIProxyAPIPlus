@@ -23,6 +23,7 @@ const (
 	redisKeyModels     = "models"
 	redisKeyUsage      = "usage"
 	redisKeyRequestLog = "request-log"
+	redisKeyAppLog     = "app-log"
 
 	homeReconnectInterval          = time.Second
 	homeReconnectFailoverThreshold = 3
