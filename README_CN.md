@@ -36,8 +36,8 @@
 
 ZikZak AI 是一款基于 AI 的价格比较应用，扫描条形码即可发现超值优惠。您的个人购物助手永不休息。
 
-[![从 App Store 下载](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
-[![从 Google Play 获取](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
+<a href="https://apps.apple.com/tr/app/zik-zak/id1563425450"><img src="assets/app-store-badge.png" width="160" style="margin-right: 8px;"></a>
+<a href="https://play.google.com/store/apps/details?id=dev.zuzu.zingo"><img src="assets/google-play-badge.png" width="160"></a>
 
 ---
 

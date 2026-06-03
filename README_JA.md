@@ -36,8 +36,8 @@ ZikZak AI にご赞助いただきありがとうございます！
 
 ZikZak AI は AI を活用した価格比較アプリです。バーコードをスキャンするだけで、驚くほどお得な情報を見つけられます。あなたの頼りになるショッピングアシスタントです。
 
-[![App Store からダウンロード](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
-[![Google Play で入手](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
+<a href="https://apps.apple.com/tr/app/zik-zak/id1563425450"><img src="assets/app-store-badge.png" width="160" style="margin-right: 8px;"></a>
+<a href="https://play.google.com/store/apps/details?id=dev.zuzu.zingo"><img src="assets/google-play-badge.png" width="160"></a>
 
 ---
 

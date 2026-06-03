@@ -16,8 +16,8 @@ Thanks to ZikZak AI for sponsoring this project!
 
 ZikZak AI is an AI-Powered Price Comparison app that you scan barcodes, and discover amazing savings instantly. Your personal shopping assistant that never sleeps.
 
-[![Download on the App Store](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
-[![Get it on Google Play](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
+<a href="https://apps.apple.com/tr/app/zik-zak/id1563425450"><img src="assets/app-store-badge.png" width="160" style="margin-right: 8px;"></a>
+<a href="https://play.google.com/store/apps/details?id=dev.zuzu.zingo"><img src="assets/google-play-badge.png" width="160"></a>
 
 ---
 
