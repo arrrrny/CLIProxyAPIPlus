@@ -14,27 +14,12 @@ So you can use local or multi-account CLI access with OpenAI(include Responses)/
 
 Thanks to ZikZak AI for sponsoring this project!
 
-ZikZak AI is an AI-Powered Price Comparison
-app that you scan barcodes, and discover amazing savings instantly. Your personal shopping assistant that never sleeps.
+ZikZak AI is an AI-Powered Price Comparison app that you scan barcodes, and discover amazing savings instantly. Your personal shopping assistant that never sleeps.
+
+[![Download on the App Store](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
+[![Get it on Google Play](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
 
 ---
-
-<div class="download-buttons">
-                        <a href="https://apps.apple.com/tr/app/zik-zak/id1563425450" class="download-btn ios" target="_blank" rel="noopener">
-                            <i class="fab fa-apple"></i>
-                            <div>
-                                <span class="download-text" data-en="Download on the" data-tr="İndir">Download on the</span>
-                                <span class="store-name">App Store</span>
-                            </div>
-                        </a>
-                        <a href="https://play.google.com/store/apps/details?id=dev.zuzu.zingo" class="download-btn android" target="_blank" rel="noopener">
-                            <i class="fab fa-google-play"></i>
-                            <div>
-                                <span class="download-text" data-en="Get it on" data-tr="İndir">Get it on</span>
-                                <span class="store-name">Google Play</span>
-                            </div>
-                        </a>
-                    </div>
 
 ## Overview
 
