@@ -6,10 +6,13 @@ import (
 	"strings"
 )
 
-const codexBuiltinImageModelID = "gpt-image-2"
-const xaiBuiltinImageModelID = "grok-imagine-image"
-const xaiBuiltinImageQualityModelID = "grok-imagine-image-quality"
-const xaiBuiltinVideoModelID = "grok-imagine-video"
+const (
+	codexBuiltinImageModelID        = "gpt-image-2"
+	xaiBuiltinImageModelID          = "grok-imagine-image"
+	xaiBuiltinImageQualityModelID   = "grok-imagine-image-quality"
+	xaiBuiltinVideoModelID          = "grok-imagine-video"
+	xaiBuiltinVideo15PreviewModelID = "grok-imagine-video-1.5-preview"
+)
 
 // staticModelsJSON mirrors the top-level structure of models.json.
 type staticModelsJSON struct {
@@ -457,6 +460,8 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetAmazonQModels()
 	case "antigravity":
 		return GetAntigravityModels()
+	case "xai", "x-ai", "grok":
+		return GetXAIModels()
 	case "codebuddy":
 		return GetCodeBuddyModels()
 	case "cursor":
@@ -495,6 +500,7 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 		data.CodexPro,
 		data.Kimi,
 		data.Antigravity,
+		data.XAI,
 		GetGitHubCopilotModels(),
 		GetKiroModels(),
 		GetKiloModels(),
