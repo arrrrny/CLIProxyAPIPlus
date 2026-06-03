@@ -217,7 +217,7 @@ func TestApplyCodexWebsocketHeadersPassesThroughClientIdentityHeaders(t *testing
 	if got := headers.Get("X-Client-Request-Id"); got != "019d2233-e240-7162-992d-38df0a2a0e0d" {
 		t.Fatalf("X-Client-Request-Id = %s, want %s", got, "019d2233-e240-7162-992d-38df0a2a0e0d")
 	}
-	if got := headers["session_id"]; len(got) != 1 || got[0] != "legacy-session" {
+	if got := (map[string][]string)(headers)["session_id"]; len(got) != 1 || got[0] != "legacy-session" {
 		t.Fatalf("session_id = %#v, want [legacy-session]", got)
 	}
 	if got := headers.Get("Session-Id"); got != "" {
@@ -238,7 +238,7 @@ func TestApplyCodexWebsocketHeadersCanonicalizesLegacyUnderscoreSessionHeader(t 
 
 	headers := applyCodexWebsocketHeaders(ctx, http.Header{}, auth, "", nil)
 
-	if got := headers["session_id"]; len(got) != 1 || got[0] != "legacy-underscore-session" {
+	if got := (map[string][]string)(headers)["session_id"]; len(got) != 1 || got[0] != "legacy-underscore-session" {
 		t.Fatalf("session_id = %#v, want [legacy-underscore-session]", got)
 	}
 	if got := headers.Get("Session-Id"); got != "" {
@@ -373,7 +373,7 @@ func TestApplyCodexWebsocketHeadersUsesCanonicalAccountHeader(t *testing.T) {
 	if got := headerValueCaseInsensitive(headers, "ChatGPT-Account-ID"); got != "acct-1" {
 		t.Fatalf("ChatGPT-Account-ID = %s, want acct-1", got)
 	}
-	values, ok := headers["ChatGPT-Account-ID"]
+	values, ok := (map[string][]string)(headers)["ChatGPT-Account-ID"]
 	if !ok {
 		t.Fatalf("expected exact ChatGPT-Account-ID key, got %#v", headers)
 	}
@@ -387,7 +387,7 @@ func TestApplyCodexPromptCacheHeadersSetsSessionIDAndLegacyConversation(t *testi
 
 	_, headers := applyCodexPromptCacheHeaders("openai-response", req, []byte(`{"model":"gpt-5-codex"}`))
 
-	if got := headers["session_id"]; len(got) != 1 || got[0] != "cache-1" {
+	if got := (map[string][]string)(headers)["session_id"]; len(got) != 1 || got[0] != "cache-1" {
 		t.Fatalf("session_id = %#v, want [cache-1]", got)
 	}
 	if got := headers.Get("Session-Id"); got != "" {
@@ -425,10 +425,10 @@ func TestApplyCodexPromptCacheHeadersClaudeUsesClaudeCodeSessionID(t *testing.T)
 	if secondKey != firstKey {
 		t.Fatalf("same Claude Code session_id produced different websocket prompt_cache_key: first=%q second=%q", firstKey, secondKey)
 	}
-	if got := firstHeaders["session_id"]; len(got) != 1 || got[0] != firstKey {
+	if got := (map[string][]string)(firstHeaders)["session_id"]; len(got) != 1 || got[0] != firstKey {
 		t.Fatalf("first session_id = %#v, want [%q]", got, firstKey)
 	}
-	if got := secondHeaders["session_id"]; len(got) != 1 || got[0] != firstKey {
+	if got := (map[string][]string)(secondHeaders)["session_id"]; len(got) != 1 || got[0] != firstKey {
 		t.Fatalf("second session_id = %#v, want [%q]", got, firstKey)
 	}
 }
@@ -444,7 +444,7 @@ func TestApplyCodexPromptCacheHeadersClaudeRejectsBareUserID(t *testing.T) {
 	if got := gjson.GetBytes(body, "prompt_cache_key").String(); got != "" {
 		t.Fatalf("bare metadata.user_id must not create websocket prompt_cache_key, got %q; body=%s", got, string(body))
 	}
-	if got := headers["session_id"]; len(got) != 0 {
+	if got := (map[string][]string)(headers)["session_id"]; len(got) != 0 {
 		t.Fatalf("bare metadata.user_id must not create websocket session_id, got %#v", got)
 	}
 	if got := headers.Get("Session-Id"); got != "" {
@@ -484,7 +484,7 @@ func TestApplyCodexWebsocketHeadersIdentityConfuseRemapsPromptCacheKey(t *testin
 	if gotKey := gjson.GetBytes(body, "prompt_cache_key").String(); gotKey != expectedPromptCacheKey {
 		t.Fatalf("prompt_cache_key = %q, want %q", gotKey, expectedPromptCacheKey)
 	}
-	if gotSession := headers["session_id"]; len(gotSession) != 1 || gotSession[0] != expectedPromptCacheKey {
+	if gotSession := (map[string][]string)(headers)["session_id"]; len(gotSession) != 1 || gotSession[0] != expectedPromptCacheKey {
 		t.Fatalf("session_id = %#v, want [%q]", gotSession, expectedPromptCacheKey)
 	}
 	if gotCanonicalSession := headers.Get("Session-Id"); gotCanonicalSession != "" {

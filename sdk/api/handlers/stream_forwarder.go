@@ -70,14 +70,12 @@ func (h *BaseAPIHandler) ForwardStream(c *gin.Context, flusher http.Flusher, can
 		case chunk, ok := <-data:
 			if !ok {
 				// Prefer surfacing a terminal error if one is pending.
-				if terminalErr == nil {
-					select {
-					case errMsg, ok := <-errs:
-						if ok && errMsg != nil {
-							terminalErr = errMsg
-						}
-					default:
+				select {
+				case errMsg, ok := <-errs:
+					if ok && errMsg != nil {
+						terminalErr = errMsg
 					}
+				default:
 				}
 				if terminalErr != nil {
 					if opts.WriteTerminalError != nil {

@@ -163,9 +163,9 @@ func (s *FileBodySource) Paths() []string {
 }
 
 // WriteTo merges all ordered parts into w.
-func (s *FileBodySource) WriteTo(w io.Writer) error {
+func (s *FileBodySource) WriteTo(w io.Writer) (int64, error) {
 	if s == nil || w == nil {
-		return nil
+		return 0, nil
 	}
 	paths := s.Paths()
 	wrote := false
@@ -175,14 +175,14 @@ func (s *FileBodySource) WriteTo(w io.Writer) error {
 			if os.IsNotExist(errOpen) {
 				continue
 			}
-			return errOpen
+			return 0, errOpen
 		}
 		if wrote {
 			if _, errWrite := io.WriteString(w, "\n"); errWrite != nil {
 				if errClose := file.Close(); errClose != nil {
 					log.WithError(errClose).Warn("failed to close log part file")
 				}
-				return errWrite
+				return 0, errWrite
 			}
 		}
 		_, errCopy := io.Copy(w, file)
@@ -193,17 +193,17 @@ func (s *FileBodySource) WriteTo(w io.Writer) error {
 			}
 		}
 		if errCopy != nil {
-			return errCopy
+			return 0, errCopy
 		}
 		wrote = true
 	}
-	return nil
+	return 0, nil
 }
 
 // Bytes merges all ordered parts into memory.
 func (s *FileBodySource) Bytes() ([]byte, error) {
 	var buf bytes.Buffer
-	if errWrite := s.WriteTo(&buf); errWrite != nil {
+	if _, errWrite := s.WriteTo(&buf); errWrite != nil {
 		return nil, errWrite
 	}
 	return buf.Bytes(), nil
@@ -755,9 +755,7 @@ func (l *FileRequestLogger) generateFilename(url string, requestID ...string) st
 	}
 
 	// Remove leading slash
-	if strings.HasPrefix(path, "/") {
-		path = path[1:]
-	}
+	path = strings.TrimPrefix(path, "/")
 
 	// Sanitize path for filename
 	sanitized := l.sanitizeForFilename(path)
@@ -1169,7 +1167,7 @@ func writeAPISectionWithSource(w io.Writer, sectionHeader string, sectionPrefix 
 		}
 	}
 	tracker := &trailingNewlineTrackingWriter{writer: w}
-	if errWrite := source.WriteTo(tracker); errWrite != nil {
+	if _, errWrite := source.WriteTo(tracker); errWrite != nil {
 		return errWrite
 	}
 	if errWrite := writeSectionSpacing(w, tracker.trailingNewlines); errWrite != nil {
@@ -1216,12 +1214,10 @@ func writeResponseSection(w io.Writer, statusCode int, statusWritten bool, respo
 		}
 	}
 
-	if responseHeaders != nil {
-		for key, values := range responseHeaders {
-			for _, value := range values {
-				if _, errWrite := io.WriteString(w, fmt.Sprintf("%s: %s\n", key, value)); errWrite != nil {
-					return errWrite
-				}
+	for key, values := range responseHeaders {
+		for _, value := range values {
+			if _, errWrite := io.WriteString(w, fmt.Sprintf("%s: %s\n", key, value)); errWrite != nil {
+				return errWrite
 			}
 		}
 	}
@@ -1366,11 +1362,9 @@ func (l *FileRequestLogger) formatLogContent(url, method string, headers map[str
 	content.WriteString("=== RESPONSE ===\n")
 	content.WriteString(fmt.Sprintf("Status: %d\n", status))
 
-	if responseHeaders != nil {
-		for key, values := range responseHeaders {
-			for _, value := range values {
-				content.WriteString(fmt.Sprintf("%s: %s\n", key, value))
-			}
+	for key, values := range responseHeaders {
+		for _, value := range values {
+			content.WriteString(fmt.Sprintf("%s: %s\n", key, value))
 		}
 	}
 
