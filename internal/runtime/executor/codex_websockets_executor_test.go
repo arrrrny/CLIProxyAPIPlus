@@ -460,10 +460,14 @@ func TestApplyCodexWebsocketHeadersIdentityConfuseRemapsPromptCacheKey(t *testin
 		Routing: config.RoutingConfig{SessionAffinity: true},
 		Codex:   config.CodexConfig{IdentityConfuse: true},
 	}
-	keyAccountID := string("ChatGPT-Account-ID")
-	values, ok := headers[keyAccountID]
-	if !ok {
-		t.Fatalf("expected exact ChatGPT-Account-ID key, got %#v", headers)
+
+	req := cliproxyexecutor.Request{
+		Model:   "gpt-5-codex",
+		Payload: []byte(`{"prompt_cache_key":"cache-1"}`),
+	}
+	auth := &cliproxyauth.Auth{
+		ID:       "auth-ws-1",
+		Provider: "codex",
 	}
 
 	body, headers := applyCodexPromptCacheHeaders("openai-response", req, []byte(`{"model":"gpt-5-codex"}`))

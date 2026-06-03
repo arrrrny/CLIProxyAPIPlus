@@ -93,6 +93,20 @@ func (c *Client) HeartbeatOK() bool {
 	return c.heartbeatOK.Load()
 }
 
+// RPushAppLog pushes an application log entry to the home Redis app-log list.
+func (c *Client) RPushAppLog(ctx context.Context, payload []byte) error {
+	if c == nil {
+		return ErrDisabled
+	}
+	c.mu.Lock()
+	cmd := c.cmd
+	c.mu.Unlock()
+	if cmd == nil {
+		return ErrNotConnected
+	}
+	return cmd.RPush(ctx, redisKeyAppLog, payload).Err()
+}
+
 func (c *Client) Close() {
 	if c == nil {
 		return

@@ -64,6 +64,80 @@ type imageCallResult struct {
 	Quality       string
 }
 
+type imagesStreamExecutionResult struct {
+	Data            <-chan []byte
+	UpstreamHeaders http.Header
+	Errs            <-chan *interfaces.ErrorMessage
+}
+
+func setImagesSSEHeaders(c *gin.Context) {
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Access-Control-Allow-Origin", "*")
+}
+
+func (h *OpenAIAPIHandler) newImagesStreamKeepAliveTicker() (*time.Ticker, <-chan time.Time) {
+	if h == nil || h.BaseAPIHandler == nil {
+		return nil, nil
+	}
+	interval := handlers.StreamingKeepAliveInterval(h.Cfg)
+	if interval <= 0 {
+		return nil, nil
+	}
+	ticker := time.NewTicker(interval)
+	return ticker, ticker.C
+}
+
+func writeImagesStreamKeepAlive(c *gin.Context, flusher http.Flusher) {
+	_, _ = c.Writer.Write([]byte(": keep-alive\n\n"))
+	flusher.Flush()
+}
+
+func writeImagesStreamErrorEvent(c *gin.Context, errMsg *interfaces.ErrorMessage) {
+	if errMsg == nil {
+		return
+	}
+	status := http.StatusInternalServerError
+	if errMsg.StatusCode > 0 {
+		status = errMsg.StatusCode
+	}
+	errText := http.StatusText(status)
+	if errMsg.Error != nil && strings.TrimSpace(errMsg.Error.Error()) != "" {
+		errText = errMsg.Error.Error()
+	}
+	body := handlers.BuildErrorResponseBody(status, errText)
+	_, _ = fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", string(body))
+}
+
+func (h *OpenAIAPIHandler) waitImagesStreamExecution(c *gin.Context, flusher http.Flusher, execute func() imagesStreamExecutionResult) (imagesStreamExecutionResult, bool, bool) {
+	resultChan := make(chan imagesStreamExecutionResult, 1)
+	go func() {
+		resultChan <- execute()
+	}()
+
+	keepAlive, keepAliveC := h.newImagesStreamKeepAliveTicker()
+	defer func() {
+		if keepAlive != nil {
+			keepAlive.Stop()
+		}
+	}()
+
+	streamStarted := false
+	for {
+		select {
+		case <-c.Request.Context().Done():
+			return imagesStreamExecutionResult{}, streamStarted, true
+		case result := <-resultChan:
+			return result, streamStarted, false
+		case <-keepAliveC:
+			setImagesSSEHeaders(c)
+			writeImagesStreamKeepAlive(c, flusher)
+			streamStarted = true
+		}
+	}
+}
+
 type sseFrameAccumulator struct {
 	pending []byte
 }

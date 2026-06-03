@@ -29,6 +29,8 @@ const (
 	SelectedAuthCallbackMetadataKey = "selected_auth_callback"
 	// ExecutionSessionMetadataKey identifies a long-lived downstream execution session.
 	ExecutionSessionMetadataKey = "execution_session_id"
+	// ServiceTierMetadataKey stores the client-requested service tier in Options.Metadata.
+	ServiceTierMetadataKey = "service_tier"
 )
 
 // Request encapsulates the translated payload that will be sent to a provider executor.
