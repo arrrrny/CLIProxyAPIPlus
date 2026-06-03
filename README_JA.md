@@ -28,6 +28,19 @@ OAuth経由でOpenAI Codex（GPTモデル）およびClaude Codeもサポート�
 - 設定によるOpenAI互換アップストリームプロバイダー（例：OpenRouter）
 - プロキシ埋め込み用の再利用可能なGo SDK（`docs/sdk-usage.md`を参照）
 
+## スポンサー
+
+[![https://zuzu.dev](./assets/zikzak-ai.png)](https://zuzu.dev) [![Sponsored by ZikZak AI](https://img.shields.io/badge/Sponsored%20by-ZikZak%20AI-8A2BE2?style=flat-square&logo=heart)](https://zuzu.dev)
+
+ZikZak AI にご赞助いただきありがとうございます！
+
+ZikZak AI は AI を活用した価格比較アプリです。バーコードをスキャンするだけで、驚くほどお得な情報を見つけられます。あなたの頼りになるショッピングアシスタントです。
+
+[![App Store からダウンロード](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
+[![Google Play で入手](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
+
+---
+
 ## はじめに
 
 CLIProxyAPIガイド：[https://help.router-for.me/](https://help.router-for.me/)

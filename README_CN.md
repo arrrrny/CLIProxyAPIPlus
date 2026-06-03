@@ -28,6 +28,19 @@
 - 通过配置接入上游 OpenAI 兼容提供商（例如 OpenRouter）
 - 可复用的 Go SDK（见 `docs/sdk-usage_CN.md`）
 
+## 赞助
+
+[![https://zuzu.dev](./assets/zikzak-ai.png)](https://zuzu.dev) [![Sponsored by ZikZak AI](https://img.shields.io/badge/Sponsored%20by-ZikZak%20AI-8A2BE2?style=flat-square&logo=heart)](https://zuzu.dev)
+
+感谢 ZikZak AI 对本项目的赞助！
+
+ZikZak AI 是一款基于 AI 的价格比较应用，扫描条形码即可发现超值优惠。您的个人购物助手永不休息。
+
+[![从 App Store 下载](assets/app-store-badge.png)](https://apps.apple.com/tr/app/zik-zak/id1563425450)
+[![从 Google Play 获取](assets/google-play-badge.png)](https://play.google.com/store/apps/details?id=dev.zuzu.zingo)
+
+---
+
 ## 新手入门
 
 CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-for.me/cn/)

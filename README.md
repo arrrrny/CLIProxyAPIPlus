@@ -10,7 +10,7 @@ So you can use local or multi-account CLI access with OpenAI(include Responses)/
 
 ## Sponsor
 
-[![https://zuzu.dev](./assets/zikzak-ai.png)](https://zuzu.dev)
+[![https://zuzu.dev](./assets/zikzak-ai.png)](https://zuzu.dev) [![Sponsored by ZikZak AI](https://img.shields.io/badge/Sponsored%20by-ZikZak%20AI-8A2BE2?style=flat-square&logo=heart)](https://zuzu.dev)
 
 Thanks to ZikZak AI for sponsoring this project!
 
