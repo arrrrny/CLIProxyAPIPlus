@@ -154,7 +154,14 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 				}
 				continue
 			}
-			items := redisqueue.PopOldest(count)
+			items, ok := popRedisQueueItems(args[1], count)
+			if !ok {
+				_ = writeRedisError(writer, fmt.Sprintf("ERR unsupported channel '%s'", strings.TrimSpace(args[1])))
+				if !flush() {
+					return
+				}
+				continue
+			}
 			if hasCount {
 				_ = writeRedisArrayOfBulkStrings(writer, items)
 				if !flush() {
