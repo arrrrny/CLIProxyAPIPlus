@@ -95,6 +95,8 @@ type WatcherWrapper struct {
 	snapshotAuths         func() []*coreauth.Auth
 	setUpdateQueue        func(queue chan<- watcher.AuthUpdate)
 	dispatchRuntimeUpdate func(update watcher.AuthUpdate) bool
+	setPluginAuthParser   func(parser PluginAuthParser)
+	dispatchPersistedAuth func(update watcher.AuthUpdate) bool
 	notifyTokenRefreshed  func(tokenID, accessToken, refreshToken, expiresAt string) // 方案 A: 后台刷新通知
 }
 

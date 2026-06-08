@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -14,21 +15,28 @@ const DefaultServiceTier = "default"
 
 // Record contains the usage statistics captured for a single provider request.
 type Record struct {
-	Provider     string
+	Provider string
+	// ExecutorType stores the concrete executor type that handled the request.
+	ExecutorType string
 	Model        string
 	Alias        string
 	APIKey       string
 	AuthID       string
 	AuthIndex    string
 	AuthType     string
-	ExecutorType string
 	Source       string
-	RequestedAt  time.Time
-	Latency      time.Duration
-	TTFT         time.Duration
-	Failed       bool
-	Fail         Failure
-	Detail       Detail
+	// ReasoningEffort stores the translated upstream thinking level for request event logs.
+	ReasoningEffort string
+	// ServiceTier stores the client-requested service tier for request event logs.
+	ServiceTier string
+	RequestedAt time.Time
+	Latency     time.Duration
+	TTFT        time.Duration
+	Failed      bool
+	Fail        Failure
+	Detail      Detail
+	// ResponseHeaders stores a snapshot of upstream response headers for usage sinks.
+	ResponseHeaders http.Header
 }
 
 // Failure holds HTTP failure metadata for an upstream request attempt.

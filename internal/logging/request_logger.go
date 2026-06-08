@@ -1240,7 +1240,7 @@ func writePreformattedAPISectionWithSource(w io.Writer, sectionHeader string, se
 		}
 	}
 	tracker := &trailingNewlineTrackingWriter{writer: w}
-	if errWrite := source.WriteTo(tracker); errWrite != nil {
+	if _, errWrite := source.WriteTo(tracker); errWrite != nil {
 		return errWrite
 	}
 	if errWrite := writeSectionSpacing(w, tracker.trailingNewlines); errWrite != nil {

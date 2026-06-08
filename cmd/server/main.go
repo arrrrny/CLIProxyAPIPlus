@@ -583,7 +583,7 @@ func main() {
 		CallbackPort: oauthCallbackPort,
 	}
 
-	commandMode := vertexImport != "" || login || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || xaiLogin
+	commandMode := vertexImport != "" || login || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin
 	cloudConfigMissing := isCloudDeploy && !configFileExists
 	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
 	if shouldStartExampleAPIKeyWarningServer(cfg, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode) {
@@ -849,4 +849,14 @@ func loadPluginBootstrapConfig(path string) *config.Config {
 		return cfg
 	}
 	return cfg
+}
+
+func shouldStartExampleAPIKeyWarningServer(cfg *config.Config, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode bool) bool {
+	if cfg == nil || commandMode || homeMode || cloudConfigMissing {
+		return false
+	}
+	if tuiMode && !standalone {
+		return false
+	}
+	return safemode.HasExampleAPIKeys(cfg.APIKeys)
 }

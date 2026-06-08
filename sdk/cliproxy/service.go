@@ -142,6 +142,278 @@ func (s *Service) GetWatcher() *WatcherWrapper {
 	return s.watcher
 }
 
+func (s *Service) registerPluginAuthParser() {
+	var parser PluginAuthParser
+	if s != nil && s.pluginHost != nil {
+		parser = s.pluginHost
+	}
+	sdkAuth.RegisterPluginAuthParser(parser)
+	if s != nil && s.watcher != nil {
+		s.watcher.SetPluginAuthParser(parser)
+	}
+}
+
+func (s *Service) syncPluginRuntime(ctx context.Context) {
+	if !s.syncPluginRuntimeConfig(ctx) {
+		return
+	}
+	s.syncPluginModelRuntime(ctx)
+}
+
+func (s *Service) syncPluginRuntimeConfig(ctx context.Context) bool {
+	if s == nil {
+		sdkAuth.RegisterPluginAuthParser(nil)
+		return false
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	s.cfgMu.RLock()
+	cfg := s.cfg
+	s.cfgMu.RUnlock()
+
+	if s.pluginHost != nil {
+		s.pluginHost.ApplyConfig(ctx, cfg)
+	}
+	s.registerPluginAuthParser()
+	if s.pluginHost == nil {
+		return false
+	}
+	s.pluginHost.RegisterFrontendAuthProviders()
+	if s.accessManager != nil {
+		s.accessManager.SetProviders(sdkaccess.RegisteredProviders())
+	}
+	s.pluginHost.RegisterUsagePlugins()
+	sdktranslator.SetPluginHooks(s.pluginHost)
+	if s.server != nil {
+		s.server.RefreshPluginManagementRoutes()
+	}
+	return true
+}
+
+func (s *Service) syncPluginModelRuntime(ctx context.Context) {
+	if s == nil || s.pluginHost == nil || s.coreManager == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.pluginHost.RegisterModels(ctx, registry.GetGlobalRegistry())
+	s.rebindExecutors()
+	s.pluginHost.RegisterExecutors(s.coreManager, registry.GetGlobalRegistry())
+	s.refreshPluginModelRegistrations(ctx)
+	s.coreManager.RefreshSchedulerAll()
+}
+
+func (s *Service) refreshPluginModelRegistrations(ctx context.Context) {
+	if s == nil || s.pluginHost == nil || s.coreManager == nil {
+		return
+	}
+	s.registerModelsForAuthBatch(ctx, s.coreManager.List())
+}
+
+func (s *Service) registerModelsForAuthBatch(ctx context.Context, auths []*coreauth.Auth) {
+	if s == nil || s.coreManager == nil || len(auths) == 0 {
+		return
+	}
+	tasks := make([]modelRegistrationTask, 0, len(auths))
+	for _, auth := range auths {
+		if auth == nil {
+			continue
+		}
+		authForRegistration := auth.Clone()
+		tasks = append(tasks, modelRegistrationTask{
+			phase:    modelRegistrationPhase(authForRegistration),
+			category: modelRegistrationCategory(authForRegistration),
+			run: func() {
+				s.completeModelRegistrationForAuth(ctx, authForRegistration)
+			},
+		})
+	}
+	s.runModelRegistrationTasks(ctx, tasks)
+}
+
+func (s *Service) runModelRegistrationTasks(ctx context.Context, tasks []modelRegistrationTask) {
+	if len(tasks) == 0 {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	configAPIKeyTasks := make([]modelRegistrationTask, 0)
+	otherTasks := make([]modelRegistrationTask, 0)
+	for _, task := range tasks {
+		if task.phase == modelRegistrationPhaseConfigAPIKey {
+			configAPIKeyTasks = append(configAPIKeyTasks, task)
+			continue
+		}
+		otherTasks = append(otherTasks, task)
+	}
+
+	s.runModelRegistrationTaskPhase(ctx, configAPIKeyTasks)
+	s.runModelRegistrationTaskPhase(ctx, otherTasks)
+}
+
+func (s *Service) runModelRegistrationTaskPhase(ctx context.Context, tasks []modelRegistrationTask) {
+	if len(tasks) == 0 {
+		return
+	}
+
+	grouped := make(map[string][]modelRegistrationTask)
+	order := make([]string, 0)
+	for _, task := range tasks {
+		if task.run == nil {
+			continue
+		}
+		category := strings.ToLower(strings.TrimSpace(task.category))
+		if category == "" {
+			category = "unknown"
+		}
+		if _, exists := grouped[category]; !exists {
+			order = append(order, category)
+		}
+		grouped[category] = append(grouped[category], task)
+	}
+
+	var wg sync.WaitGroup
+	for _, category := range order {
+		group := grouped[category]
+		workers := len(group)
+		if workers > modelRegistrationMaxWorkersPerCategory {
+			workers = modelRegistrationMaxWorkersPerCategory
+		}
+		if workers <= 0 {
+			continue
+		}
+
+		taskCh := make(chan modelRegistrationTask)
+		for i := 0; i < workers; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for task := range taskCh {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+					task.run()
+				}
+			}()
+		}
+		go func(group []modelRegistrationTask) {
+			defer close(taskCh)
+			for _, task := range group {
+				select {
+				case <-ctx.Done():
+					return
+				case taskCh <- task:
+				}
+			}
+		}(group)
+	}
+	wg.Wait()
+}
+
+func modelRegistrationPhase(auth *coreauth.Auth) int {
+	if isConfigAPIKeyAuth(auth) {
+		return modelRegistrationPhaseConfigAPIKey
+	}
+	return modelRegistrationPhaseOther
+}
+
+func isConfigAPIKeyAuth(auth *coreauth.Auth) bool {
+	if auth == nil || auth.Attributes == nil {
+		return false
+	}
+	if strings.TrimSpace(auth.Attributes["api_key"]) == "" {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(auth.Attributes["source"])), "config:")
+}
+
+func modelRegistrationCategory(auth *coreauth.Auth) string {
+	if auth == nil {
+		return "unknown"
+	}
+	provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+	if compatProviderKey, _, compatDetected := openAICompatInfoFromAuth(auth); compatDetected {
+		if compatProviderKey != "" {
+			provider = compatProviderKey
+		} else {
+			provider = "openai-compatibility"
+		}
+	}
+	if provider == "" {
+		provider = "unknown"
+	}
+
+	authKind := strings.ToLower(strings.TrimSpace(auth.Attributes["auth_kind"]))
+	if authKind == "" {
+		if kind, _ := auth.AccountInfo(); strings.EqualFold(kind, "api_key") {
+			authKind = "apikey"
+		}
+	}
+	if authKind == "" {
+		return provider
+	}
+	return provider + ":" + authKind
+}
+
+func (s *Service) registerModelRefreshCallback() {
+	// Register callback for startup and periodic model catalog refresh.
+	// When remote model definitions change, re-register models for affected providers.
+	// This intentionally rebuilds per-auth model availability from the latest catalog
+	// snapshot instead of preserving prior registry suppression state.
+	registry.SetModelRefreshCallback(func(changedProviders []string) {
+		if s == nil || s.coreManager == nil || len(changedProviders) == 0 {
+			return
+		}
+
+		providerSet := make(map[string]bool, len(changedProviders))
+		for _, p := range changedProviders {
+			providerSet[strings.ToLower(strings.TrimSpace(p))] = true
+		}
+
+		auths := s.coreManager.List()
+		refreshed := 0
+		var refreshedMu sync.Mutex
+		tasks := make([]modelRegistrationTask, 0, len(auths))
+		for _, item := range auths {
+			if item == nil || item.ID == "" {
+				continue
+			}
+			auth, ok := s.coreManager.GetByID(item.ID)
+			if !ok || auth == nil || auth.Disabled {
+				continue
+			}
+			provider := strings.ToLower(strings.TrimSpace(auth.Provider))
+			if !providerSet[provider] {
+				continue
+			}
+			authForRefresh := auth
+			tasks = append(tasks, modelRegistrationTask{
+				phase:    modelRegistrationPhase(authForRefresh),
+				category: modelRegistrationCategory(authForRefresh),
+				run: func() {
+					if s.refreshModelRegistrationForAuth(authForRefresh) {
+						refreshedMu.Lock()
+						refreshed++
+						refreshedMu.Unlock()
+					}
+				},
+			})
+		}
+		s.runModelRegistrationTasks(context.Background(), tasks)
+
+		if refreshed > 0 {
+			log.Infof("re-registered models for %d auth(s) due to model catalog changes: %v", refreshed, changedProviders)
+		}
+	})
+}
+
 // newDefaultAuthManager creates a default authentication manager with all supported providers.
 func newDefaultAuthManager() *sdkAuth.Manager {
 	return sdkAuth.NewManager(
