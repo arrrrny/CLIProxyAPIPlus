@@ -237,3 +237,41 @@ func TestApplyOAuthModelAlias_SuffixPreservation(t *testing.T) {
 		t.Errorf("applyOAuthModelAlias() model = %q, want %q", resolvedModel, "gemini-2.5-pro-exp-03-25(8192)")
 	}
 }
+
+func TestApplyOAuthModelAlias_PluginProvider(t *testing.T) {
+	t.Parallel()
+
+	aliases := map[string][]internalconfig.OAuthModelAlias{
+		"qoder": {{Name: "qmodel_latest", Alias: "qlatest"}},
+	}
+
+	mgr := NewManager(nil, nil, nil)
+	mgr.SetConfig(&internalconfig.Config{})
+	mgr.SetOAuthModelAlias(aliases)
+
+	auth := &Auth{ID: "qoder-auth", Provider: "qoder", Attributes: map[string]string{"auth_kind": "oauth"}}
+
+	resolvedModel := mgr.applyOAuthModelAlias(auth, "qlatest")
+	if resolvedModel != "qmodel_latest" {
+		t.Errorf("applyOAuthModelAlias() model = %q, want %q", resolvedModel, "qmodel_latest")
+	}
+}
+
+func TestApplyOAuthModelAlias_PluginProviderSkipsAPIKey(t *testing.T) {
+	t.Parallel()
+
+	aliases := map[string][]internalconfig.OAuthModelAlias{
+		"qoder": {{Name: "qmodel_latest", Alias: "qlatest"}},
+	}
+
+	mgr := NewManager(nil, nil, nil)
+	mgr.SetConfig(&internalconfig.Config{})
+	mgr.SetOAuthModelAlias(aliases)
+
+	auth := &Auth{ID: "qoder-auth", Provider: "qoder", Attributes: map[string]string{"auth_kind": "api_key"}}
+
+	resolvedModel := mgr.applyOAuthModelAlias(auth, "qlatest")
+	if resolvedModel != "qlatest" {
+		t.Errorf("applyOAuthModelAlias() model = %q, want %q", resolvedModel, "qlatest")
+	}
+}

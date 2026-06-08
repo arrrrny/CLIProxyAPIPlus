@@ -268,30 +268,34 @@ func modelAliasChannel(auth *Auth) string {
 // Supported channels: gemini-cli, vertex, aistudio, antigravity, claude, codex, iflow, kiro, github-copilot, kimi.
 func OAuthModelAliasChannel(provider, authKind string) string {
 	provider = strings.ToLower(strings.TrimSpace(provider))
-	authKind = strings.ToLower(strings.TrimSpace(authKind))
+	authKind = normalizeOAuthModelAliasAuthKind(authKind)
+	if authKind == "apikey" {
+		return ""
+	}
 	switch provider {
 	case "gemini":
 		// gemini provider uses gemini-api-key config, not oauth-model-alias.
 		// OAuth-based gemini auth is converted to "gemini-cli" by the synthesizer.
 		return ""
 	case "vertex":
-		if authKind == "apikey" {
-			return ""
-		}
 		return "vertex"
 	case "claude":
-		if authKind == "apikey" {
-			return ""
-		}
 		return "claude"
 	case "codex":
-		if authKind == "apikey" {
-			return ""
-		}
 		return "codex"
 	case "gemini-cli", "aistudio", "antigravity", "iflow", "kiro", "github-copilot", "kimi":
 		return provider
 	default:
-		return ""
+		return provider
+	}
+}
+
+func normalizeOAuthModelAliasAuthKind(authKind string) string {
+	authKind = strings.ToLower(strings.TrimSpace(authKind))
+	switch authKind {
+	case "api_key", "api-key":
+		return "apikey"
+	default:
+		return authKind
 	}
 }
