@@ -2,19 +2,38 @@ name: release
 
 on:
   push:
-    # run only against tags
     tags:
       - "*"
 
 permissions:
-  contents: read
+  contents: write
+
+env:
+  GH_REPO: ${{ github.repository }}
+  GO_VERSION: "1.26.4"
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-amd64
+            runner: macos-15
+            goos: darwin
+            goarch: amd64
+            asset_arch: amd64
+          - target: linux-amd64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_arch: amd64
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Refresh models catalog
         run: |
           git fetch --depth 1 https://github.com/router-for-me/models.git main
@@ -22,9 +41,29 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ASSET_ARCH: ${{ matrix.asset_arch }}
         run: |
-          go build -o test-output ./cmd/server
-          rm -f test-output
+          set -euo pipefail
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          mkdir -p dist/archive
+          CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+            -ldflags="-s -w -X main.Version=${RELEASE_VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
+            -o dist/archive/cli-proxy-api ./cmd/server/
+
+          cp LICENSE README.md config.example.yaml dist/archive/
+          archive_name="CLIProxyAPI_${RELEASE_VERSION}_${GOOS}_${ASSET_ARCH}.tar.gz"
+          tar -C dist/archive -czf "dist/$archive_name" cli-proxy-api LICENSE README.md config.example.yaml
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/CLIProxyAPI_*.tar.gz --clobber
