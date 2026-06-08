@@ -41,10 +41,42 @@ jobs:
       - name: Merge upstream/main into sync
         run: |
           # Merge upstream/main into the current sync branch.
-          # This incorporates upstream changes while preferring our changes in case of conflicts.
-          git merge upstream/main -m "chore: sync with upstream/main" -X ours || {
-            echo "Merge failed unexpectedly even with -X ours."
-            exit 1
+          # -X ours prefers our changes for text conflicts but does NOT handle
+          # modify/delete conflicts (upstream deletes a file we modified).
+          # We handle those below by accepting upstream's deletions.
+          git merge upstream/main -m "chore: sync with upstream/main" -X ours 2>&1 || {
+            echo "Merge had conflicts. Resolving modify/delete conflicts..."
+            unmerged_files=$(git ls-files -u | awk '{print $4}' | sort -u)
+            for file in $unmerged_files; do
+              stages=$(git ls-files -u -- "$file" | awk '{print $2}')
+              has_stage2=false; has_stage3=false
+              for s in $stages; do
+                [ "$s" = "2" ] && has_stage2=true
+                [ "$s" = "3" ] && has_stage3=true
+              done
+              if $has_stage2 && ! $has_stage3; then
+                # Only stage 2 (ours): upstream deleted the file — accept deletion
+                echo "  -> $file: deleted upstream, accepting deletion"
+                git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
+              elif ! $has_stage2 && $has_stage3; then
+                # Only stage 3 (theirs): we deleted the file — keep our deletion
+                echo "  -> $file: deleted by us, keeping deletion"
+                git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
+              else
+                # Both sides modified — should be resolved by -X ours, but be safe
+                echo "  -> $file: using -X ours resolution"
+                git checkout --ours -- "$file"
+                git add -- "$file"
+              fi
+            done
+            # Verify nothing left unmerged
+            remaining=$(git ls-files -u | awk '{print $4}' | sort -u)
+            if [ -n "$remaining" ]; then
+              echo "ERROR: Still have unmerged files after resolution:"
+              echo "$remaining"
+              exit 1
+            fi
+            git commit -m "chore: sync with upstream/main"
           }
 
       - name: Restore sync-and-release workflow
