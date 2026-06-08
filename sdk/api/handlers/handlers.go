@@ -293,6 +293,11 @@ func disallowFreeAuthFromContext(ctx context.Context) bool {
 	return ok && raw
 }
 
+// XAntigravityAccountHeader is the HTTP header used to pin a request to a specific
+// antigravity account. The value can be either the email associated with the account
+// or the auth ID (filename like "antigravity-user@example.com.json").
+const XAntigravityAccountHeader = "X-Antigravity-Account"
+
 // BaseAPIHandler contains the handlers for API endpoints.
 // It holds a pool of clients to interact with the backend service and manages
 // load balancing, client selection, and configuration.
@@ -302,6 +307,32 @@ type BaseAPIHandler struct {
 
 	// Cfg holds the current application configuration.
 	Cfg *config.SDKConfig
+}
+
+// resolveAntigravityAccount resolves an account identifier (email or auth ID) to the
+// matching auth ID for antigravity provider auths. Returns empty string if no match.
+func (h *BaseAPIHandler) resolveAntigravityAccount(account string) string {
+	account = strings.TrimSpace(account)
+	if account == "" || h.AuthManager == nil {
+		return ""
+	}
+	if auth, ok := h.AuthManager.GetByID(account); ok {
+		return auth.ID
+	}
+	for _, auth := range h.AuthManager.List() {
+		if !strings.EqualFold(auth.Provider, "antigravity") {
+			continue
+		}
+		for _, source := range []map[string]any{auth.Metadata} {
+			if source == nil {
+				continue
+			}
+			if email, ok := source["email"].(string); ok && strings.EqualFold(strings.TrimSpace(email), account) {
+				return auth.ID
+			}
+		}
+	}
+	return ""
 }
 
 // NewBaseAPIHandlers creates a new API handlers instance.
@@ -554,6 +585,13 @@ func (h *BaseAPIHandler) executeWithAuthManager(ctx context.Context, handlerType
 	if errMsg != nil {
 		return nil, nil, errMsg
 	}
+	if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil {
+		if account := strings.TrimSpace(ginCtx.GetHeader(XAntigravityAccountHeader)); account != "" {
+			if authID := h.resolveAntigravityAccount(account); authID != "" {
+				ctx = WithPinnedAuthID(ctx, authID)
+			}
+		}
+	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
 	payload := rawJSON
@@ -601,6 +639,13 @@ func (h *BaseAPIHandler) ExecuteCountWithAuthManager(ctx context.Context, handle
 	providers, normalizedModel, errMsg := h.getRequestDetails(modelName)
 	if errMsg != nil {
 		return nil, nil, errMsg
+	}
+	if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil {
+		if account := strings.TrimSpace(ginCtx.GetHeader(XAntigravityAccountHeader)); account != "" {
+			if authID := h.resolveAntigravityAccount(account); authID != "" {
+				ctx = WithPinnedAuthID(ctx, authID)
+			}
+		}
 	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
@@ -662,6 +707,13 @@ func (h *BaseAPIHandler) executeStreamWithAuthManager(ctx context.Context, handl
 		errChan <- errMsg
 		close(errChan)
 		return nil, nil, errChan
+	}
+	if ginCtx, ok := ctx.Value("gin").(*gin.Context); ok && ginCtx != nil {
+		if account := strings.TrimSpace(ginCtx.GetHeader(XAntigravityAccountHeader)); account != "" {
+			if authID := h.resolveAntigravityAccount(account); authID != "" {
+				ctx = WithPinnedAuthID(ctx, authID)
+			}
+		}
 	}
 	reqMeta := requestExecutionMetadata(ctx)
 	reqMeta[coreexecutor.RequestedModelMetadataKey] = modelName
