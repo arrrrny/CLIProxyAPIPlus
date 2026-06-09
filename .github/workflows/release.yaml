@@ -62,6 +62,11 @@ jobs:
           cp LICENSE README.md config.example.yaml dist/archive/
           archive_name="CLIProxyAPI_${RELEASE_VERSION}_${GOOS}_${ASSET_ARCH}.tar.gz"
           tar -C dist/archive -czf "dist/$archive_name" cli-proxy-api LICENSE README.md config.example.yaml
+      - name: Ensure release exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
