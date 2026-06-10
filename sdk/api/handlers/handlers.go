@@ -675,7 +675,7 @@ func (h *BaseAPIHandler) executeWithAuthManager(ctx context.Context, handlerType
 	}
 	rawResponseHeaders := cloneHeader(resp.Headers)
 	responseHeaders := downstreamHeadersFromExecutor(rawResponseHeaders, PassthroughHeadersEnabled(h.Cfg))
-	body, responseHeaders := h.applyResponseInterceptors(ctx, handlerType, normalizedModel, modelName, opts, rawResponseHeaders, responseHeaders, rawJSON, req.Payload, resp.Payload, http.StatusOK)
+	body, responseHeaders := h.applyResponseInterceptors(ctx, handlerType, normalizedModel, modelName, opts, rawResponseHeaders, responseHeaders, opts.OriginalRequest, req.Payload, resp.Payload, http.StatusOK)
 	return body, responseHeaders, nil
 }
 
@@ -731,7 +731,7 @@ func (h *BaseAPIHandler) ExecuteCountWithAuthManager(ctx context.Context, handle
 	}
 	rawResponseHeaders := cloneHeader(resp.Headers)
 	responseHeaders := downstreamHeadersFromExecutor(rawResponseHeaders, PassthroughHeadersEnabled(h.Cfg))
-	body, responseHeaders := h.applyResponseInterceptors(ctx, handlerType, normalizedModel, modelName, opts, rawResponseHeaders, responseHeaders, rawJSON, req.Payload, resp.Payload, http.StatusOK)
+	body, responseHeaders := h.applyResponseInterceptors(ctx, handlerType, normalizedModel, modelName, opts, rawResponseHeaders, responseHeaders, opts.OriginalRequest, req.Payload, resp.Payload, http.StatusOK)
 	return body, responseHeaders, nil
 }
 
@@ -837,7 +837,7 @@ func (h *BaseAPIHandler) executeStreamWithAuthManager(ctx context.Context, handl
 			RequestedModel:  modelName,
 			RequestHeaders:  cloneHeader(opts.Headers),
 			ResponseHeaders: cloneHeader(rawStreamHeaders),
-			OriginalRequest: cloneBytes(rawJSON),
+			OriginalRequest: cloneBytes(opts.OriginalRequest),
 			RequestBody:     cloneBytes(req.Payload),
 			ChunkIndex:      pluginapi.StreamChunkHeaderInitIndex,
 			Metadata:        opts.Metadata,
@@ -991,7 +991,7 @@ func (h *BaseAPIHandler) executeStreamWithAuthManager(ctx context.Context, handl
 							RequestedModel:  modelName,
 							RequestHeaders:  cloneHeader(opts.Headers),
 							ResponseHeaders: cloneHeader(rawStreamHeaders),
-							OriginalRequest: cloneBytes(rawJSON),
+							OriginalRequest: cloneBytes(opts.OriginalRequest),
 							RequestBody:     cloneBytes(req.Payload),
 							Body:            payload,
 							HistoryChunks:   cloneByteSlices(historyChunks),
@@ -1322,6 +1322,7 @@ func (h *BaseAPIHandler) applyRequestInterceptors(ctx context.Context, handlerTy
 	opts.Headers = finalInterceptorHeaders(opts.Headers, resp.Headers)
 	if len(resp.Body) > 0 {
 		req.Payload = cloneBytes(resp.Body)
+		opts.OriginalRequest = cloneBytes(resp.Body)
 	}
 	return req, opts
 }
