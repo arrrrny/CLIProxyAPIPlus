@@ -1209,7 +1209,16 @@ func (s *Service) applyConfigUpdate(newCfg *config.Config) {
 		s.coreManager.SetConfig(newCfg)
 		s.coreManager.SetOAuthModelAlias(newCfg.OAuthModelAlias)
 	}
-	s.rebindExecutors()
+
+	var rebindAuths []*coreauth.Auth
+	if s.coreManager != nil {
+		rebindAuths = s.coreManager.List()
+	}
+	s.registerAvailableExecutors(context.Background(), executorRegistrationOptions{
+		includeBaseline:   newCfg.Home.Enabled,
+		forceReplaceAuths: true,
+		auths:             rebindAuths,
+	})
 	ctx := context.Background()
 	s.registerConfigAPIKeyAuths(ctx, newCfg)
 	s.syncPluginRuntime(ctx)
