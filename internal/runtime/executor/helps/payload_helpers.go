@@ -185,6 +185,17 @@ func isImagesEndpointRequestPath(path string) bool {
 	return false
 }
 
+func shouldStripImageGeneration(mode config.DisableImageGenerationMode, requestPath string) bool {
+	switch mode {
+	case config.DisableImageGenerationAll:
+		return true
+	case config.DisableImageGenerationChat:
+		return !isImagesEndpointRequestPath(requestPath)
+	default:
+		return false
+	}
+}
+
 func payloadModelRulesMatch(rules []config.PayloadModelRule, protocol string, models []string) bool {
 	if len(rules) == 0 || len(models) == 0 {
 		return false

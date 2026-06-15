@@ -1575,7 +1575,9 @@ func (m *Manager) Execute(ctx context.Context, providers []string, req cliproxye
 		}
 	}
 	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-		if resp, ok := m.tryAntigravityCreditsExecute(ctx, req, opts); ok {
+		if resp, ok, errCredits := m.tryAntigravityCreditsExecute(ctx, req, opts); errCredits != nil {
+			return cliproxyexecutor.Response{}, errCredits
+		} else if ok {
 			return resp, nil
 		}
 	}
@@ -1635,7 +1637,9 @@ func (m *Manager) ExecuteStream(ctx context.Context, providers []string, req cli
 		}
 	}
 	if shouldAttemptAntigravityCreditsFallback(m, lastErr, normalized) {
-		if result, ok := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); ok {
+		if result, ok, errCredits := m.tryAntigravityCreditsExecuteStream(ctx, req, opts); errCredits != nil {
+			return nil, errCredits
+		} else if ok {
 			return result, nil
 		}
 	}

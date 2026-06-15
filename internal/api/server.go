@@ -25,8 +25,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/access"
 	managementHandlers "github.com/router-for-me/CLIProxyAPI/v7/internal/api/handlers/management"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/middleware"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/api/modules"
-	ampmodule "github.com/router-for-me/CLIProxyAPI/v7/internal/api/modules/amp"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/kiro"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
@@ -698,30 +696,6 @@ func (s *Server) registerManagementRoutes() {
 		g.GET("/ws-auth", s.mgmt.GetWebsocketAuth)
 		g.PUT("/ws-auth", s.mgmt.PutWebsocketAuth)
 		g.PATCH("/ws-auth", s.mgmt.PutWebsocketAuth)
-
-		g.GET("/ampcode", s.mgmt.GetAmpCode)
-		g.GET("/ampcode/upstream-url", s.mgmt.GetAmpUpstreamURL)
-		g.PUT("/ampcode/upstream-url", s.mgmt.PutAmpUpstreamURL)
-		g.PATCH("/ampcode/upstream-url", s.mgmt.PutAmpUpstreamURL)
-		g.DELETE("/ampcode/upstream-url", s.mgmt.DeleteAmpUpstreamURL)
-		g.GET("/ampcode/upstream-api-key", s.mgmt.GetAmpUpstreamAPIKey)
-		g.PUT("/ampcode/upstream-api-key", s.mgmt.PutAmpUpstreamAPIKey)
-		g.PATCH("/ampcode/upstream-api-key", s.mgmt.PutAmpUpstreamAPIKey)
-		g.DELETE("/ampcode/upstream-api-key", s.mgmt.DeleteAmpUpstreamAPIKey)
-		g.GET("/ampcode/restrict-management-to-localhost", s.mgmt.GetAmpRestrictManagementToLocalhost)
-		g.PUT("/ampcode/restrict-management-to-localhost", s.mgmt.PutAmpRestrictManagementToLocalhost)
-		g.PATCH("/ampcode/restrict-management-to-localhost", s.mgmt.PutAmpRestrictManagementToLocalhost)
-		g.GET("/ampcode/model-mappings", s.mgmt.GetAmpModelMappings)
-		g.PUT("/ampcode/model-mappings", s.mgmt.PutAmpModelMappings)
-		g.PATCH("/ampcode/model-mappings", s.mgmt.PatchAmpModelMappings)
-		g.DELETE("/ampcode/model-mappings", s.mgmt.DeleteAmpModelMappings)
-		g.GET("/ampcode/force-model-mappings", s.mgmt.GetAmpForceModelMappings)
-		g.PUT("/ampcode/force-model-mappings", s.mgmt.PutAmpForceModelMappings)
-		g.PATCH("/ampcode/force-model-mappings", s.mgmt.PutAmpForceModelMappings)
-		g.GET("/ampcode/upstream-api-keys", s.mgmt.GetAmpUpstreamAPIKeys)
-		g.PUT("/ampcode/upstream-api-keys", s.mgmt.PutAmpUpstreamAPIKeys)
-		g.PATCH("/ampcode/upstream-api-keys", s.mgmt.PatchAmpUpstreamAPIKeys)
-		g.DELETE("/ampcode/upstream-api-keys", s.mgmt.DeleteAmpUpstreamAPIKeys)
 
 		g.GET("/request-retry", s.mgmt.GetRequestRetry)
 		g.PUT("/request-retry", s.mgmt.PutRequestRetry)

@@ -55,9 +55,11 @@ jobs:
                 [ "$s" = "3" ] && has_stage3=true
               done
               if $has_stage2 && ! $has_stage3; then
-                # Only stage 2 (ours): upstream deleted the file — accept deletion
-                echo "  -> $file: deleted upstream, accepting deletion"
-                git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
+                # Only stage 2 (ours): upstream deleted the file — keep our version
+                # so upstream deletions don't break our custom code
+                echo "  -> $file: deleted upstream, keeping our version"
+                git checkout --ours -- "$file"
+                git add -- "$file"
               elif ! $has_stage2 && $has_stage3; then
                 # Only stage 3 (theirs): we deleted the file — keep our deletion
                 echo "  -> $file: deleted by us, keeping deletion"
