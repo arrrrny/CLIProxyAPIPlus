@@ -124,6 +124,15 @@ func (w *WatcherWrapper) SetConfig(cfg *config.Config) {
 	w.setConfig(cfg)
 }
 
+// ReloadConfigIfChanged asks the underlying watcher to reload config from disk.
+func (w *WatcherWrapper) ReloadConfigIfChanged() bool {
+	if w == nil || w.reloadConfigIfChanged == nil {
+		return false
+	}
+	w.reloadConfigIfChanged()
+	return true
+}
+
 // SetPluginAuthParser updates the plugin auth parser used by the watcher.
 func (w *WatcherWrapper) SetPluginAuthParser(parser PluginAuthParser) {
 	if w == nil || w.setPluginAuthParser == nil {
