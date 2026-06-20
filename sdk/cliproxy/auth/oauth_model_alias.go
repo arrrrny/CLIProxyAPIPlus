@@ -274,8 +274,6 @@ func OAuthModelAliasChannel(provider, authKind string) string {
 	}
 	switch provider {
 	case "gemini":
-		// gemini provider uses gemini-api-key config, not oauth-model-alias.
-		// OAuth-based gemini auth is converted to "gemini-cli" by the synthesizer.
 		return ""
 	case "vertex":
 		return "vertex"

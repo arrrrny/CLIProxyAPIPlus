@@ -193,10 +193,6 @@ codex:
 # When true, enable authentication for the WebSocket API (/v1/ws).
 ws-auth: true
 
-# When true, enable Gemini CLI internal endpoints (/v1internal:*).
-# Default is false for safety.
-enable-gemini-cli-endpoint: false
-
 # When > 0, emit blank lines every N seconds for non-streaming responses to prevent idle timeouts.
 nonstream-keepalive-interval: 0
 # Streaming behavior (SSE keep-alives + safe bootstrap retries).
@@ -442,11 +438,6 @@ nonstream-keepalive-interval: 0
 # OAuth provider excluded models
 # Supported channels: gemini-cli, vertex, aistudio, antigravity, claude, codex, qwen, iflow, kiro, github-copilot.
 # oauth-excluded-models:
-#   gemini-cli:
-#     - "gemini-2.5-pro"     # exclude specific models (exact match)
-#     - "gemini-2.5-*"       # wildcard matching prefix (e.g. gemini-2.5-flash, gemini-2.5-pro)
-#     - "*-preview"          # wildcard matching suffix (e.g. gemini-3-pro-preview)
-#     - "*flash*"            # wildcard matching substring (e.g. gemini-2.5-flash-lite)
 #   vertex:
 #     - "gemini-3-pro-preview"
 #   aistudio:
