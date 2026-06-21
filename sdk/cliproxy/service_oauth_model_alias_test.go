@@ -113,3 +113,23 @@ func TestApplyOAuthModelAlias_DefaultGitHubCopilotAliasViaSanitize(t *testing.T)
 		t.Fatalf("expected aliased model name %q, got %q", "models/claude-opus-4-6", out[1].Name)
 	}
 }
+
+func TestApplyOAuthModelAlias_PerAuthAlias(t *testing.T) {
+	models := []*ModelInfo{
+		{ID: "gpt-5.3-codex-spark", Name: "models/gpt-5.3-codex-spark"},
+	}
+	attributes := map[string]string{
+		"model_aliases": `[{"name":"gpt-5.3-codex-spark","alias":"gpt-5.5"}]`,
+	}
+
+	out := applyOAuthModelAliasForAuth(nil, "codex", "oauth", attributes, models)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(out))
+	}
+	if out[0].ID != "gpt-5.5" {
+		t.Fatalf("expected per-auth alias id %q, got %q", "gpt-5.5", out[0].ID)
+	}
+	if out[0].Name != "models/gpt-5.5" {
+		t.Fatalf("expected per-auth alias name %q, got %q", "models/gpt-5.5", out[0].Name)
+	}
+}
