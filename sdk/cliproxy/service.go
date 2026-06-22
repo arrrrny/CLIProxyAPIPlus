@@ -864,6 +864,24 @@ func (s *Service) hasNativeOpenAICompatExecutorConfig(a *coreauth.Auth, provider
 	return false
 }
 
+func (s *Service) unregisterOpenAICompatExecutor(providerKey string) {
+	if s == nil || s.coreManager == nil {
+		return
+	}
+	providerKey = strings.ToLower(strings.TrimSpace(providerKey))
+	if providerKey == "" {
+		return
+	}
+	existing, okExecutor := s.coreManager.Executor(providerKey)
+	if !okExecutor || existing == nil {
+		return
+	}
+	if _, okOpenAICompat := existing.(*executor.OpenAICompatExecutor); !okOpenAICompat {
+		return
+	}
+	s.coreManager.UnregisterExecutor(providerKey)
+}
+
 func (s *Service) ensureExecutorsForAuth(a *coreauth.Auth) {
 	s.ensureExecutorsForAuthWithMode(a, false)
 }
@@ -1006,6 +1024,7 @@ func (s *Service) registerExecutorForAuth(a *coreauth.Auth, forceReplace bool) {
 		if s.pluginHost != nil &&
 			s.pluginHost.HasExecutorCandidateProvider(providerKey) &&
 			!s.hasNativeOpenAICompatExecutorConfig(a, providerKey) {
+			s.unregisterOpenAICompatExecutor(providerKey)
 			return
 		}
 		s.coreManager.RegisterExecutor(executor.NewOpenAICompatExecutor(providerKey, s.cfg))
@@ -1255,7 +1274,6 @@ func (s *Service) applyConfigUpdateWithAuthSynthesis(newCfg *config.Config, synt
 		forceReplaceAuths: true,
 		auths:             rebindAuths,
 	})
-	ctx := coreauth.WithSkipPersist(context.Background())
 	if synthesizeConfigAuths {
 		s.registerConfigAPIKeyAuths(ctx, newCfg)
 	}
@@ -1264,7 +1282,7 @@ func (s *Service) applyConfigUpdateWithAuthSynthesis(newCfg *config.Config, synt
 			log.Warnf("failed to restore cooldown state after config update: %v", errRestoreCooldown)
 		}
 	}
-	s.syncPluginRuntime(ctx)
+	s.syncPluginModelRuntime(ctx)
 }
 
 func (s *Service) reloadConfigFromWatcher() bool {
