@@ -19,11 +19,13 @@ import (
 )
 
 const (
-	redisKeyConfig     = "config"
-	redisChannelConfig = "config"
-	redisKeyUsage      = "usage"
-	redisKeyRequestLog = "request-log"
-	redisKeyAppLog     = "app-log"
+	redisKeyConfig       = "config"
+	redisChannelConfig   = "config"
+	redisKeyUsage        = "usage"
+	redisKeyRequestLog   = "request-log"
+	redisKeyAppLog       = "app-log"
+	redisKeyPluginStatus = "plugin-status"
+	redisKeyPluginTasks  = "plugin-tasks"
 
 	homeReconnectInterval          = time.Second
 	homeReconnectFailoverThreshold = 3
@@ -49,6 +51,16 @@ type clusterNode struct {
 type clusterNodesEnvelope struct {
 	OK    bool          `json:"ok"`
 	Nodes []clusterNode `json:"nodes"`
+}
+
+type PluginTask struct {
+	ID             uint      `json:"id"`
+	Operation      string    `json:"operation"`
+	PluginID       string    `json:"plugin_id"`
+	TargetNodeType string    `json:"target_node_type,omitempty"`
+	TargetNodeID   string    `json:"target_node_id,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type KVSetOptions struct {
