@@ -849,3 +849,28 @@ func sleepWithContext(ctx context.Context, d time.Duration) {
 		return
 	}
 }
+
+// RPushPluginStatus pushes a plugin status report payload to the home cluster's
+// plugin-status list. This is used to report plugin sync state back to the home server.
+func (c *Client) RPushPluginStatus(ctx context.Context, payload []byte) error {
+	return c.cmd.RPush(ctx, redisKeyPluginStatus, payload).Err()
+}
+
+// GetPluginTasks fetches all pending plugin tasks from the home cluster.
+// It returns the full list of tasks stored under the plugin-tasks key.
+func (c *Client) GetPluginTasks(ctx context.Context) ([]PluginTask, error) {
+	raw, err := c.cmd.LRange(ctx, redisKeyPluginTasks, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+	tasks := make([]PluginTask, 0, len(raw))
+	for _, item := range raw {
+		var task PluginTask
+		if errUnmarshal := json.Unmarshal([]byte(item), &task); errUnmarshal == nil {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks, nil
+}
+
+// marshalJSON is a convenience wrapper for json.Marshal.

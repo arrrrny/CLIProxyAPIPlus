@@ -1362,14 +1362,14 @@ func (s *Service) applyConfigUpdateWithAuthSynthesis(newCfg *config.Config, synt
 		auths:             rebindAuths,
 	})
 	if synthesizeConfigAuths {
-		s.registerConfigAPIKeyAuths(ctx, newCfg)
+		s.registerConfigAPIKeyAuths(context.Background(), newCfg)
 	}
 	if s.coreManager != nil && !newCfg.Home.Enabled && newCfg.SaveCooldownStatus {
 		if errRestoreCooldown := s.coreManager.RestoreCooldownStates(context.Background()); errRestoreCooldown != nil {
 			log.Warnf("failed to restore cooldown state after config update: %v", errRestoreCooldown)
 		}
 	}
-	s.syncPluginModelRuntime(ctx)
+	s.syncPluginModelRuntime(context.Background())
 }
 
 func (s *Service) reloadConfigFromWatcher() bool {

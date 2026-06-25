@@ -562,3 +562,16 @@ func normalizeToolParameters(raw string) string {
 	}
 	return string(schema)
 }
+
+func normalizeCodexServiceTier(result gjson.Result) string {
+	if !result.Exists() || result.Type != gjson.String {
+		return ""
+	}
+
+	switch strings.ToLower(strings.TrimSpace(result.String())) {
+	case "fast", "priority":
+		return "priority"
+	default:
+		return ""
+	}
+}

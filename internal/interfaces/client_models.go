@@ -119,3 +119,35 @@ type ToolDeclaration struct {
 	// FunctionDeclarations is a list of available functions that the model can call.
 	FunctionDeclarations []interface{} `json:"functionDeclarations"`
 }
+
+// GCPProject represents the response structure for a Google Cloud project list request.
+type GCPProject struct {
+	// Projects is the list of projects returned by the API.
+	Projects []GCPProjectProjects `json:"projects"`
+}
+
+// GCPProjectLabels defines the labels associated with a GCP project.
+type GCPProjectLabels struct {
+	Environment string `json:"environment,omitempty"`
+}
+
+// GCPProjectProjects contains details about a single Google Cloud project.
+type GCPProjectProjects struct {
+	// ProjectID is the unique identifier of the project.
+	ProjectID string `json:"projectId"`
+
+	// DisplayName is the human-readable name of the project.
+	DisplayName string `json:"displayName"`
+
+	// Name is the resource name of the project.
+	Name string `json:"name"`
+
+	// State is the lifecycle state of the project.
+	State string `json:"state"`
+
+	// Labels contains any labels associated with the project.
+	Labels GCPProjectLabels `json:"labels"`
+
+	// CreateTime is the timestamp when the project was created.
+	CreateTime string `json:"createTime"`
+}

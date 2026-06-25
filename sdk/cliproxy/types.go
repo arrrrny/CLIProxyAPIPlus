@@ -104,6 +104,7 @@ type WatcherWrapper struct {
 	setPluginAuthParser   func(parser PluginAuthParser)
 	dispatchPersistedAuth func(update watcher.AuthUpdate) bool
 	notifyTokenRefreshed  func(tokenID, accessToken, refreshToken, expiresAt string) // 方案 A: 后台刷新通知
+	reloadConfigIfChanged func()
 }
 
 // Start proxies to the underlying watcher Start implementation.

@@ -78,6 +78,7 @@ func main() {
 
 	// Command-line flags to control the application's behavior.
 	var codexLogin bool
+	var login bool
 	var codexDeviceLogin bool
 	var claudeLogin bool
 	var kiloLogin bool
@@ -115,6 +116,7 @@ func main() {
 
 	// Define command-line flags for different operation modes.
 	flag.BoolVar(&codexLogin, "codex-login", false, "Login to Codex using OAuth")
+	flag.BoolVar(&login, "login", false, "Login Google Account")
 	flag.BoolVar(&codexDeviceLogin, "codex-device-login", false, "Login to Codex using device code flow")
 	flag.BoolVar(&claudeLogin, "claude-login", false, "Login to Claude using OAuth")
 	flag.BoolVar(&kiloLogin, "kilo-login", false, "Login to Kilo AI using device flow")
