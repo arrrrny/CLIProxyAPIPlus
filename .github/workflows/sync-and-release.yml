@@ -43,33 +43,12 @@ jobs:
           # Merge upstream/main into the current sync branch.
           # -X ours prefers our changes for text conflicts but does NOT handle
           # modify/delete conflicts (upstream deletes a file we modified).
-          # We handle those below by accepting upstream's deletions.
           git merge upstream/main -m "chore: sync with upstream/main" -X ours 2>&1 || {
             echo "Merge had conflicts. Resolving modify/delete conflicts..."
-            unmerged_files=$(git ls-files -u | awk '{print $4}' | sort -u)
-            for file in $unmerged_files; do
-              stages=$(git ls-files -u -- "$file" | awk '{print $2}')
-              has_stage2=false; has_stage3=false
-              for s in $stages; do
-                [ "$s" = "2" ] && has_stage2=true
-                [ "$s" = "3" ] && has_stage3=true
-              done
-              if $has_stage2 && ! $has_stage3; then
-                # Only stage 2 (ours): upstream deleted the file — keep our version
-                # so upstream deletions don't break our custom code
-                echo "  -> $file: deleted upstream, keeping our version"
-                git checkout --ours -- "$file"
-                git add -- "$file"
-              elif ! $has_stage2 && $has_stage3; then
-                # Only stage 3 (theirs): we deleted the file — keep our deletion
-                echo "  -> $file: deleted by us, keeping deletion"
-                git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
-              else
-                # Both sides modified — should be resolved by -X ours, but be safe
-                echo "  -> $file: using -X ours resolution"
-                git checkout --ours -- "$file"
-                git add -- "$file"
-              fi
+            for file in $(git ls-files -u | awk '{print $4}' | sort -u); do
+              echo "  -> $file: upstream deleted, keeping our version"
+              git checkout --ours -- "$file"
+              git add -- "$file"
             done
             # Verify nothing left unmerged
             remaining=$(git ls-files -u | awk '{print $4}' | sort -u)
@@ -78,8 +57,31 @@ jobs:
               echo "$remaining"
               exit 1
             fi
-            git commit -m "chore: sync with upstream/main"
           }
+
+          # Restore fork-specific files that upstream deleted but our fork depends on.
+          # When upstream deletes a file we haven't modified, git silently accepts the
+          # deletion without any conflict. These files need to be restored from HEAD.
+          if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
+            # Still in merge state (had conflicts, not yet committed)
+            git diff HEAD --diff-filter=D --name-only | while IFS= read -r f || [ -n "$f" ]; do
+              echo "  -> Restoring fork-specific file: $f"
+              git checkout HEAD -- "$f"
+              git add -- "$f"
+            done
+            git commit -m "chore: sync with upstream/main"
+          else
+            # Merge was clean and already auto-committed as a merge commit.
+            # HEAD^1 is the first parent (our sync branch before the merge).
+            git diff HEAD^1..HEAD --diff-filter=D --name-only | while IFS= read -r f || [ -n "$f" ]; do
+              echo "  -> Restoring fork-specific file: $f"
+              git checkout HEAD^1 -- "$f"
+              git add -- "$f"
+            done
+            if ! git diff --cached --quiet; then
+              git commit --amend --no-edit
+            fi
+          fi
 
       - name: Restore sync-and-release workflow
         run: |
