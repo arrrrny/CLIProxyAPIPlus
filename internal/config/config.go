@@ -119,6 +119,9 @@ type Config struct {
 	// GeminiKey defines Gemini API key configurations with optional routing overrides.
 	GeminiKey []GeminiKey `yaml:"gemini-api-key" json:"gemini-api-key"`
 
+	// InteractionsKey defines Google Interactions API key configurations.
+	InteractionsKey []GeminiKey `yaml:"interactions-api-key" json:"interactions-api-key"`
+
 	// KiroKey defines a list of Kiro (AWS CodeWhisperer) configurations.
 	KiroKey []KiroKey `yaml:"kiro" json:"kiro"`
 
@@ -1145,11 +1148,25 @@ func (cfg *Config) SanitizeGeminiKeys() {
 	if cfg == nil {
 		return
 	}
+	cfg.GeminiKey = sanitizeGeminiKeyEntries(cfg.GeminiKey)
+}
 
-	seen := make(map[string]struct{}, len(cfg.GeminiKey))
-	out := cfg.GeminiKey[:0]
-	for i := range cfg.GeminiKey {
-		entry := cfg.GeminiKey[i]
+// SanitizeInteractionsKeys deduplicates and normalizes native Interactions credentials.
+// It uses API key + base URL as the uniqueness key.
+func (cfg *Config) SanitizeInteractionsKeys() {
+	if cfg == nil {
+		return
+	}
+	cfg.InteractionsKey = sanitizeGeminiKeyEntries(cfg.InteractionsKey)
+}
+
+// sanitizeGeminiKeyEntries deduplicates and normalizes a slice of GeminiKey entries.
+// It uses API key + base URL as the uniqueness key.
+func sanitizeGeminiKeyEntries(entries []GeminiKey) []GeminiKey {
+	seen := make(map[string]struct{}, len(entries))
+	out := entries[:0]
+	for i := range entries {
+		entry := entries[i]
 		entry.APIKey = strings.TrimSpace(entry.APIKey)
 		if entry.APIKey == "" {
 			continue
@@ -1167,24 +1184,6 @@ func (cfg *Config) SanitizeGeminiKeys() {
 		out = append(out, entry)
 	}
 	return out
-}
-
-// SanitizeGeminiKeys deduplicates and normalizes Gemini credentials.
-// It uses API key + base URL as the uniqueness key.
-func (cfg *Config) SanitizeGeminiKeys() {
-	if cfg == nil {
-		return
-	}
-	cfg.GeminiKey = sanitizeGeminiKeyEntries(cfg.GeminiKey)
-}
-
-// SanitizeInteractionsKeys deduplicates and normalizes native Interactions credentials.
-// It uses API key + base URL as the uniqueness key.
-func (cfg *Config) SanitizeInteractionsKeys() {
-	if cfg == nil {
-		return
-	}
-	cfg.InteractionsKey = sanitizeGeminiKeyEntries(cfg.InteractionsKey)
 }
 
 func normalizeModelPrefix(prefix string) string {

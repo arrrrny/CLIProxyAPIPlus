@@ -20,6 +20,7 @@ import (
 
 	"github.com/joho/godotenv"
 	configaccess "github.com/router-for-me/CLIProxyAPI/v7/internal/access/config_access"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/api"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/auth/kiro"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cmd"
@@ -68,6 +69,16 @@ func setKiroIncognitoMode(cfg *config.Config, useIncognito, noIncognito bool) {
 	} else {
 		cfg.IncognitoBrowser = true // Kiro default
 	}
+}
+
+func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode bool) bool {
+	if cfg == nil || commandMode || homeMode || cloudConfigMissing {
+		return false
+	}
+	if tuiMode && !standalone {
+		return false
+	}
+	return safemode.HasExampleAPIKeys(cfg.APIKeys)
 }
 
 // main is the entry point of the application.

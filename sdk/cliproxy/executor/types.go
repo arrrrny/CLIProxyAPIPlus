@@ -32,6 +32,8 @@ const (
 	ExecutionSessionMetadataKey = "execution_session_id"
 	// ServiceTierMetadataKey stores the client-requested service tier in Options.Metadata.
 	ServiceTierMetadataKey = "service_tier"
+	// AuthSelectionModelMetadataKey stores the model name used during auth selection.
+	AuthSelectionModelMetadataKey = "auth_selection_model"
 )
 
 // Request encapsulates the translated payload that will be sent to a provider executor.
