@@ -138,9 +138,16 @@ func ConvertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool) 
 					return
 				}
 
-				signature, ok := sigcompat.CompatibleSignatureForProvider(sigcompat.SignatureProviderGPT, part.Get("signature").String())
+				rawSignature := part.Get("signature").String()
+				signature, ok := sigcompat.CompatibleSignatureForProvider(sigcompat.SignatureProviderGPT, rawSignature)
 				if !ok {
-					return
+					if !codexClaudeTargetAcceptsGrokSignature(modelName) {
+						return
+					}
+					if _, err := sigcompat.InspectGrokEncryptedContent(rawSignature); err != nil {
+						return
+					}
+					signature = rawSignature
 				}
 
 				flushMessage()
