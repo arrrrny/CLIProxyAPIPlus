@@ -582,3 +582,8 @@ func normalizeCodexServiceTier(result gjson.Result) string {
 		return ""
 	}
 }
+
+func codexClaudeTargetAcceptsGrokSignature(modelName string) bool {
+	baseModel := strings.ToLower(strings.TrimSpace(thinking.ParseSuffix(modelName).ModelName))
+	return strings.Contains(baseModel, "grok")
+}
