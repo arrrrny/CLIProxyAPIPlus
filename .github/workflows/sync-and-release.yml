@@ -46,9 +46,14 @@ jobs:
           git merge upstream/main -m "chore: sync with upstream/main" -X ours 2>&1 || {
             echo "Merge had conflicts. Resolving modify/delete conflicts..."
             for file in $(git ls-files -u | awk '{print $4}' | sort -u); do
-              echo "  -> $file: upstream deleted, keeping our version"
-              git checkout --ours -- "$file"
-              git add -- "$file"
+              if git checkout --ours -- "$file" 2>/dev/null; then
+                echo "  -> $file: upstream deleted, keeping our version"
+                git add -- "$file"
+              else
+                # --ours failed, meaning we deleted this file — accept our deletion
+                echo "  -> $file: deleted by us, keeping deletion"
+                git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
+              fi
             done
             # Verify nothing left unmerged
             remaining=$(git ls-files -u | awk '{print $4}' | sort -u)
