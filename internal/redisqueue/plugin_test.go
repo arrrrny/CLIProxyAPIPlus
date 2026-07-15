@@ -258,6 +258,24 @@ func requireBoolField(t *testing.T, payload map[string]json.RawMessage, key stri
 	}
 }
 
+func requireTokensPayload(t *testing.T, payload map[string]json.RawMessage) map[string]json.RawMessage {
+	t.Helper()
+	raw, ok := payload["tokens"]
+	if !ok {
+		t.Fatal("payload missing tokens")
+	}
+	var tokens map[string]json.RawMessage
+	if errUnmarshal := json.Unmarshal(raw, &tokens); errUnmarshal != nil {
+		t.Fatalf("unmarshal tokens: %v", errUnmarshal)
+	}
+	return tokens
+}
+
+func requireTokensBoolField(t *testing.T, payload map[string]json.RawMessage, key string, want bool) {
+	t.Helper()
+	requireBoolField(t, requireTokensPayload(t, payload), key, want)
+}
+
 func requireFailField(t *testing.T, payload map[string]json.RawMessage, wantStatus int, wantBody string) {
 	t.Helper()
 

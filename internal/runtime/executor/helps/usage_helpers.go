@@ -104,7 +104,6 @@ func (r *UsageReporter) SetTranslatedReasoningEffort(payload []byte, format stri
 		return
 	}
 	r.reasoning = thinking.ExtractTranslatedReasoningEffort(payload, format)
-	r.serviceTier = extractServiceTierFromPayload(payload)
 }
 
 func (r *UsageReporter) TrackHTTPClient(client *http.Client) *http.Client {
@@ -266,19 +265,6 @@ func (r *UsageReporter) buildRecordForModel(model string, detail usage.Detail, f
 		Fail:        fail,
 		Detail:      detail,
 	}
-}
-
-func extractServiceTierFromPayload(payload []byte) string {
-	if len(payload) == 0 {
-		return usage.DefaultServiceTier
-	}
-	for _, path := range []string{"service_tier", "request.service_tier", "response.service_tier"} {
-		serviceTier := strings.TrimSpace(gjson.GetBytes(payload, path).String())
-		if serviceTier != "" {
-			return serviceTier
-		}
-	}
-	return usage.DefaultServiceTier
 }
 
 func failFromErrors(errs ...error) usage.Failure {

@@ -53,13 +53,14 @@ func (p *usageQueuePlugin) HandleUsage(ctx context.Context, record coreusage.Rec
 	requestID := strings.TrimSpace(internallogging.GetRequestID(ctx))
 
 	tokens := tokenStats{
-		InputTokens:         record.Detail.InputTokens,
-		OutputTokens:        record.Detail.OutputTokens,
-		ReasoningTokens:     record.Detail.ReasoningTokens,
-		CachedTokens:        record.Detail.CachedTokens,
-		CacheReadTokens:     record.Detail.CacheReadTokens,
-		CacheCreationTokens: record.Detail.CacheCreationTokens,
-		TotalTokens:         record.Detail.TotalTokens,
+		InputTokens:            record.Detail.InputTokens,
+		OutputTokens:           record.Detail.OutputTokens,
+		ReasoningTokens:        record.Detail.ReasoningTokens,
+		CachedTokens:           record.Detail.CachedTokens,
+		CacheReadTokens:        record.Detail.CacheReadTokens,
+		CacheReadTokensPresent: true,
+		CacheCreationTokens:    record.Detail.CacheCreationTokens,
+		TotalTokens:            record.Detail.TotalTokens,
 	}
 	if tokens.TotalTokens == 0 {
 		tokens.TotalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens
@@ -122,13 +123,14 @@ type requestDetail struct {
 }
 
 type tokenStats struct {
-	InputTokens         int64 `json:"input_tokens"`
-	OutputTokens        int64 `json:"output_tokens"`
-	ReasoningTokens     int64 `json:"reasoning_tokens"`
-	CachedTokens        int64 `json:"cached_tokens"`
-	CacheReadTokens     int64 `json:"cache_read_tokens"`
-	CacheCreationTokens int64 `json:"cache_creation_tokens"`
-	TotalTokens         int64 `json:"total_tokens"`
+	InputTokens            int64 `json:"input_tokens"`
+	OutputTokens           int64 `json:"output_tokens"`
+	ReasoningTokens        int64 `json:"reasoning_tokens"`
+	CachedTokens           int64 `json:"cached_tokens"`
+	CacheReadTokens        int64 `json:"cache_read_tokens"`
+	CacheReadTokensPresent bool  `json:"cache_read_tokens_present"`
+	CacheCreationTokens    int64 `json:"cache_creation_tokens"`
+	TotalTokens            int64 `json:"total_tokens"`
 }
 
 type failDetail struct {
