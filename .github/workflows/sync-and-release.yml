@@ -97,6 +97,17 @@ jobs:
             git commit -m "ci: restore sync-and-release workflow"
           fi
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+          cache: false
+
+      - name: Verify build
+        run: |
+          echo "Verifying build compiles before creating release tag..."
+          go build -o /dev/null ./cmd/server/...
+
       - name: Check for changes to push
         id: check
         run: |
