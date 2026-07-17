@@ -15,6 +15,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginstore"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,18 +27,22 @@ const (
 	redisKeyAppLog       = "app-log"
 	redisKeyPluginStatus = "plugin-status"
 	redisKeyPluginTasks  = "plugin-tasks"
+	redisKeyPluginSync   = "plugin-sync"
 
 	homeReconnectInterval          = time.Second
 	homeReconnectFailoverThreshold = 3
 )
 
+const pluginSyncUnsupportedErrorType = "plugin_sync_unsupported"
+
 var (
-	ErrDisabled       = errors.New("home client disabled")
-	ErrNotConnected   = errors.New("home not connected")
-	ErrEmptyResponse  = errors.New("home returned empty response")
-	ErrAuthNotFound   = errors.New("home auth not found")
-	ErrConfigNotFound = errors.New("home config not found")
-	ErrModelsNotFound = errors.New("home models not found")
+	ErrDisabled              = errors.New("home client disabled")
+	ErrNotConnected          = errors.New("home not connected")
+	ErrEmptyResponse         = errors.New("home returned empty response")
+	ErrAuthNotFound          = errors.New("home auth not found")
+	ErrConfigNotFound        = errors.New("home config not found")
+	ErrModelsNotFound        = errors.New("home models not found")
+	ErrPluginSyncUnsupported = errors.New("home plugin sync is unsupported")
 )
 
 type clusterNode struct {

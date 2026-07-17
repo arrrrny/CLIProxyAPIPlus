@@ -2,6 +2,7 @@ package home
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
