@@ -103,6 +103,14 @@ jobs:
           go-version: "1.26.4"
           cache: false
 
+      - name: Sync go.sum after merge
+        run: |
+          go mod download
+          if ! git diff --quiet -- go.mod go.sum; then
+            git add go.mod go.sum
+            git commit -m "fix: sync go.mod and go.sum after upstream merge"
+          fi
+
       - name: Verify build
         run: |
           echo "Verifying build compiles before creating release tag..."
