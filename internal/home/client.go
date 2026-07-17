@@ -2,12 +2,17 @@ package home
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,6 +36,9 @@ const (
 
 	homeReconnectInterval          = time.Second
 	homeReconnectFailoverThreshold = 3
+	homeRedisOperationTimeout      = 3 * time.Second
+	homeSubscriptionReceiveTimeout = 3 * time.Second
+	redisChannelCluster            = "cluster"
 )
 
 const pluginSyncUnsupportedErrorType = "plugin_sync_unsupported"
@@ -117,20 +125,6 @@ func (c *Client) HeartbeatOK() bool {
 	return c.heartbeatOK.Load()
 }
 
-// RPushAppLog pushes an application log entry to the home Redis app-log list.
-func (c *Client) RPushAppLog(ctx context.Context, payload []byte) error {
-	if c == nil {
-		return ErrDisabled
-	}
-	c.mu.Lock()
-	cmd := c.cmd
-	c.mu.Unlock()
-	if cmd == nil {
-		return ErrNotConnected
-	}
-	return cmd.RPush(ctx, redisKeyAppLog, payload).Err()
-}
-
 func (c *Client) Close() {
 	if c == nil {
 		return
@@ -169,7 +163,7 @@ func (c *Client) addrLocked() (string, bool) {
 	if c.homeCfg.Port <= 0 {
 		return "", false
 	}
-	return fmt.Sprintf("%s:%d", host, c.homeCfg.Port), true
+	return net.JoinHostPort(host, strconv.Itoa(c.homeCfg.Port)), true
 }
 
 func (c *Client) ensureClients() error {
@@ -188,18 +182,111 @@ func (c *Client) ensureClients() error {
 	}
 
 	if c.cmd == nil {
-		c.cmd = redis.NewClient(&redis.Options{
-			Addr:     addr,
-			Password: c.homeCfg.Password,
-		})
+		options, errOptions := c.redisOptionsLocked(addr)
+		if errOptions != nil {
+			return errOptions
+		}
+		c.cmd = redis.NewClient(options)
 	}
 	if c.sub == nil {
-		c.sub = redis.NewClient(&redis.Options{
-			Addr:     addr,
-			Password: c.homeCfg.Password,
-		})
+		options, errOptions := c.redisOptionsLocked(addr)
+		if errOptions != nil {
+			return errOptions
+		}
+		c.sub = redis.NewClient(options)
 	}
 	return nil
+}
+
+func (c *Client) redisOptionsLocked(addr string) (*redis.Options, error) {
+	tlsConfig, errTLS := c.homeTLSConfigLocked(addr)
+	if errTLS != nil {
+		return nil, errTLS
+	}
+	return &redis.Options{
+		Addr:                  addr,
+		TLSConfig:             tlsConfig,
+		DialTimeout:           homeRedisOperationTimeout,
+		ReadTimeout:           homeRedisOperationTimeout,
+		WriteTimeout:          homeRedisOperationTimeout,
+		MaxRetries:            -1,
+		DialerRetries:         1,
+		ContextTimeoutEnabled: true,
+	}, nil
+}
+
+func (c *Client) homeTLSConfigLocked(addr string) (*tls.Config, error) {
+	serverName := strings.TrimSpace(c.homeCfg.TLS.ServerName)
+	if serverName == "" {
+		if c.homeCfg.TLS.UseTargetServerName {
+			serverName = hostFromAddress(addr)
+		} else {
+			serverName = strings.TrimSpace(c.seedHost)
+		}
+	}
+	if serverName == "" {
+		serverName = strings.TrimSpace(c.homeCfg.Host)
+	}
+	return newHomeTLSConfig(c.homeCfg.TLS, serverName)
+}
+
+func hostFromAddress(addr string) string {
+	host, _, errSplit := net.SplitHostPort(strings.TrimSpace(addr))
+	if errSplit == nil {
+		return strings.TrimSpace(host)
+	}
+	return strings.TrimSpace(addr)
+}
+
+func newHomeTLSConfig(cfg config.HomeTLSConfig, fallbackServerName string) (*tls.Config, error) {
+	if !cfg.Enable {
+		return nil, nil
+	}
+
+	serverName := strings.TrimSpace(cfg.ServerName)
+	if serverName == "" {
+		serverName = strings.TrimSpace(fallbackServerName)
+	}
+
+	tlsConfig := &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		ServerName:         serverName,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	}
+
+	clientCertPath := strings.TrimSpace(cfg.ClientCert)
+	clientKeyPath := strings.TrimSpace(cfg.ClientKey)
+	if clientCertPath != "" || clientKeyPath != "" {
+		if clientCertPath == "" || clientKeyPath == "" {
+			return nil, fmt.Errorf("home tls: client certificate and key must be set together")
+		}
+		certPair, errLoad := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+		if errLoad != nil {
+			return nil, fmt.Errorf("home tls: load client certificate: %w", errLoad)
+		}
+		tlsConfig.Certificates = []tls.Certificate{certPair}
+	}
+
+	caCertPath := strings.TrimSpace(cfg.CACert)
+	if caCertPath == "" {
+		return tlsConfig, nil
+	}
+
+	caCertPEM, errRead := os.ReadFile(caCertPath)
+	if errRead != nil {
+		return nil, fmt.Errorf("home tls: read ca-cert: %w", errRead)
+	}
+
+	certPool, errPool := x509.SystemCertPool()
+	if errPool != nil || certPool == nil {
+		certPool = x509.NewCertPool()
+	}
+	if !certPool.AppendCertsFromPEM(caCertPEM) {
+		return nil, fmt.Errorf("home tls: ca-cert contains no PEM certificates")
+	}
+	tlsConfig.RootCAs = certPool
+
+	return tlsConfig, nil
 }
 
 func (c *Client) commandClient() (*redis.Client, error) {
@@ -236,7 +323,23 @@ func (c *Client) Ping(ctx context.Context) error {
 	return cmd.Ping(ctx).Err()
 }
 
+func (c *Client) clusterDiscoveryEnabled() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.clusterDiscoveryEnabledLocked()
+}
+
+func (c *Client) clusterDiscoveryEnabledLocked() bool {
+	return !c.homeCfg.DisableClusterDiscovery
+}
+
 func (c *Client) refreshBestClusterNode(ctx context.Context) {
+	if !c.clusterDiscoveryEnabled() {
+		return
+	}
 	switched, errRefresh := c.refreshClusterNodes(ctx)
 	if errRefresh != nil {
 		log.Debugf("home cluster nodes unavailable: %v", errRefresh)
@@ -250,6 +353,9 @@ func (c *Client) refreshBestClusterNode(ctx context.Context) {
 }
 
 func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
+	if !c.clusterDiscoveryEnabled() {
+		return false, nil
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -262,11 +368,10 @@ func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
 		return false, errDo
 	}
 
-	var envelope clusterNodesEnvelope
-	if errUnmarshal := json.Unmarshal([]byte(raw), &envelope); errUnmarshal != nil {
-		return false, errUnmarshal
+	nodes, errParse := parseClusterNodesPayload([]byte(raw))
+	if errParse != nil {
+		return false, errParse
 	}
-	nodes := normalizeClusterNodes(envelope.Nodes)
 	if len(nodes) == 0 {
 		return false, nil
 	}
@@ -276,6 +381,28 @@ func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
 	c.clusterNodes = nodes
 	c.reconnectFailures = 0
 	return c.switchToNodeLocked(nodes[0]), nil
+}
+
+func parseClusterNodesPayload(raw []byte) ([]clusterNode, error) {
+	var envelope clusterNodesEnvelope
+	if errUnmarshal := json.Unmarshal(raw, &envelope); errUnmarshal != nil {
+		return nil, errUnmarshal
+	}
+	return normalizeClusterNodes(envelope.Nodes), nil
+}
+
+func (c *Client) updateClusterNodesFromPayload(raw []byte) error {
+	if c == nil || !c.clusterDiscoveryEnabled() {
+		return nil
+	}
+	nodes, errParse := parseClusterNodesPayload(raw)
+	if errParse != nil {
+		return errParse
+	}
+	c.mu.Lock()
+	c.clusterNodes = nodes
+	c.mu.Unlock()
+	return nil
 }
 
 func normalizeClusterNodes(nodes []clusterNode) []clusterNode {
@@ -324,12 +451,35 @@ func (c *Client) failoverAfterReconnectFailure() (bool, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if !c.clusterDiscoveryEnabledLocked() {
+		c.reconnectFailures = 0
+		return false, ""
+	}
 	c.reconnectFailures++
 	if c.reconnectFailures < homeReconnectFailoverThreshold {
 		return false, ""
 	}
 	c.reconnectFailures = 0
 
+	return c.switchToNextNodeLocked()
+}
+
+func (c *Client) failoverAfterSubscriptionTimeout() (bool, string) {
+	if c == nil {
+		return false, ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.clusterDiscoveryEnabledLocked() {
+		c.reconnectFailures = 0
+		return false, ""
+	}
+	c.reconnectFailures = 0
+	return c.switchToNextNodeLocked()
+}
+
+func (c *Client) switchToNextNodeLocked() (bool, string) {
 	currentHost := strings.TrimSpace(c.homeCfg.Host)
 	currentPort := c.homeCfg.Port
 	candidates := append([]clusterNode(nil), c.clusterNodes...)
@@ -350,6 +500,13 @@ func (c *Client) failoverAfterReconnectFailure() (bool, string) {
 		}
 	}
 	return false, ""
+}
+
+func (c *Client) markSubscriptionTimeout() {
+	switched, addr := c.failoverAfterSubscriptionTimeout()
+	if switched {
+		log.Warnf("home subscription heartbeat timeout; switching to %s", addr)
+	}
 }
 
 func (c *Client) resetReconnectFailures() {
@@ -734,6 +891,151 @@ func (c *Client) RPushRequestLog(ctx context.Context, payload []byte) error {
 	return cmd.RPush(ctx, redisKeyRequestLog, payload).Err()
 }
 
+func (c *Client) RPushAppLog(ctx context.Context, payload []byte) error {
+	cmd, errClient := c.commandClient()
+	if errClient != nil {
+		return errClient
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	return cmd.RPush(ctx, redisKeyAppLog, payload).Err()
+}
+
+func (c *Client) RPushPluginStatus(ctx context.Context, payload []byte) error {
+	cmd, errClient := c.commandClient()
+	if errClient != nil {
+		return errClient
+	}
+	if len(payload) == 0 {
+		return nil
+	}
+	return cmd.RPush(ctx, redisKeyPluginStatus, payload).Err()
+}
+
+func (c *Client) GetPluginTasks(ctx context.Context) ([]PluginTask, error) {
+	cmd, errClient := c.commandClient()
+	if errClient != nil {
+		return nil, errClient
+	}
+	raw, errGet := cmd.Get(ctx, redisKeyPluginTasks).Bytes()
+	if errors.Is(errGet, redis.Nil) {
+		return nil, nil
+	}
+	if errGet != nil {
+		return nil, errGet
+	}
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var tasks []PluginTask
+	if errUnmarshal := json.Unmarshal(raw, &tasks); errUnmarshal != nil {
+		return nil, errUnmarshal
+	}
+	return tasks, nil
+}
+
+func (c *Client) GetPluginSync(ctx context.Context, request pluginstore.PluginSyncRequest) (pluginstore.PluginSyncResponse, error) {
+	cmd, errClient := c.commandClient()
+	if errClient != nil {
+		return pluginstore.PluginSyncResponse{}, errClient
+	}
+	payload, errMarshal := json.Marshal(request)
+	if errMarshal != nil {
+		return pluginstore.PluginSyncResponse{}, fmt.Errorf("marshal plugin sync request: %w", errMarshal)
+	}
+	requestCmd := redis.NewStringCmd(ctx, "get", redisKeyPluginSync, string(payload))
+	if errProcess := cmd.Process(ctx, requestCmd); errProcess != nil {
+		if message, ok := pluginSyncUnsupportedMessage(errProcess.Error()); ok {
+			return pluginstore.PluginSyncResponse{}, fmt.Errorf("%w: %s", ErrPluginSyncUnsupported, message)
+		}
+		return pluginstore.PluginSyncResponse{}, errProcess
+	}
+	raw, errBytes := requestCmd.Bytes()
+	if errBytes != nil {
+		return pluginstore.PluginSyncResponse{}, errBytes
+	}
+	defer func() {
+		requestCmd.SetVal("")
+		for index := range raw {
+			raw[index] = 0
+		}
+	}()
+	if len(raw) == 0 {
+		return pluginstore.PluginSyncResponse{}, ErrEmptyResponse
+	}
+	if message, ok := pluginSyncUnsupportedResponse(raw); ok {
+		return pluginstore.PluginSyncResponse{}, fmt.Errorf("%w: %s", ErrPluginSyncUnsupported, message)
+	}
+	var response pluginstore.PluginSyncResponse
+	if errUnmarshal := json.Unmarshal(raw, &response); errUnmarshal != nil {
+		response.Clear()
+		return pluginstore.PluginSyncResponse{}, fmt.Errorf("decode plugin sync response: %w", errUnmarshal)
+	}
+	if errValidate := response.Validate(time.Now().UTC()); errValidate != nil {
+		response.Clear()
+		return pluginstore.PluginSyncResponse{}, errValidate
+	}
+	return response, nil
+}
+
+func pluginSyncUnsupportedResponse(raw []byte) (string, bool) {
+	var response struct {
+		Error struct {
+			Code    string `json:"code"`
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if errUnmarshal := json.Unmarshal(raw, &response); errUnmarshal != nil {
+		return "", false
+	}
+	if pluginSyncUnsupportedCode(response.Error.Code) || pluginSyncUnsupportedCode(response.Error.Type) {
+		message := strings.TrimSpace(response.Error.Message)
+		if message == "" {
+			message = pluginSyncUnsupportedErrorType
+		}
+		return message, true
+	}
+	return pluginSyncUnsupportedMessage(response.Error.Message)
+}
+
+func pluginSyncUnsupportedCode(code string) bool {
+	return strings.EqualFold(strings.TrimSpace(code), pluginSyncUnsupportedErrorType)
+}
+
+func pluginSyncUnsupportedMessage(message string) (string, bool) {
+	message = strings.ToLower(strings.TrimSpace(message))
+	message = strings.TrimSpace(strings.TrimPrefix(message, "err "))
+	switch message {
+	case pluginSyncUnsupportedErrorType,
+		"unsupported key",
+		"wrong number of arguments for 'get' command":
+		return message, true
+	default:
+		return "", false
+	}
+}
+
+func (c *Client) handleSubscriptionPayload(ctx context.Context, channel string, payload string, onConfig func([]byte) error) error {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		return nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(channel)) {
+	case redisChannelConfig:
+		if onConfig == nil {
+			return nil
+		}
+		return onConfig([]byte(payload))
+	case redisChannelCluster:
+		return c.updateClusterNodesFromPayload([]byte(payload))
+	default:
+		return nil
+	}
+}
+
 // StartConfigSubscriber connects to home, fetches config once via GET config, then subscribes to
 // the "config" channel to receive runtime config updates.
 //
@@ -806,7 +1108,7 @@ func (c *Client) StartConfigSubscriber(ctx context.Context, onConfig func([]byte
 		}
 
 		// Ensure the subscription is established before marking heartbeat OK.
-		if _, errReceive := pubsub.Receive(ctx); errReceive != nil {
+		if _, errReceive := pubsub.ReceiveTimeout(ctx, homeSubscriptionReceiveTimeout); errReceive != nil {
 			_ = pubsub.Close()
 			c.markReconnectFailure("subscribe")
 			sleepWithContext(ctx, homeReconnectInterval)
@@ -817,24 +1119,50 @@ func (c *Client) StartConfigSubscriber(ctx context.Context, onConfig func([]byte
 		c.heartbeatOK.Store(true)
 
 		for {
-			msg, errMsg := pubsub.ReceiveMessage(ctx)
+			event, errMsg := pubsub.ReceiveTimeout(ctx, homeSubscriptionReceiveTimeout)
 			if errMsg != nil {
 				_ = pubsub.Close()
 				c.heartbeatOK.Store(false)
-				c.markReconnectFailure("subscription")
+				if isTimeoutError(errMsg) {
+					c.markSubscriptionTimeout()
+				} else {
+					c.markReconnectFailure("subscription")
+				}
 				sleepWithContext(ctx, homeReconnectInterval)
 				break
 			}
-			if msg == nil {
-				continue
-			}
-			if payload := strings.TrimSpace(msg.Payload); payload != "" {
-				if errApply := onConfig([]byte(payload)); errApply != nil {
-					log.Warn("failed to apply config update from home control center, ignoring")
+			switch msg := event.(type) {
+			case *redis.Message:
+				if msg == nil {
+					continue
 				}
+				if errApply := c.handleSubscriptionPayload(ctx, msg.Channel, msg.Payload, onConfig); errApply != nil {
+					if strings.EqualFold(strings.TrimSpace(msg.Channel), redisChannelCluster) {
+						log.Warn("failed to apply cluster update from home control center, ignoring")
+					} else {
+						log.Warn("failed to apply config update from home control center, ignoring")
+					}
+				}
+			case *redis.Pong:
+				c.resetReconnectFailures()
+			case *redis.Subscription:
+				continue
+			default:
+				log.Debugf("home subscription returned unsupported message type %T", event)
 			}
 		}
 	}
+}
+
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) {
@@ -854,28 +1182,3 @@ func sleepWithContext(ctx context.Context, d time.Duration) {
 		return
 	}
 }
-
-// RPushPluginStatus pushes a plugin status report payload to the home cluster's
-// plugin-status list. This is used to report plugin sync state back to the home server.
-func (c *Client) RPushPluginStatus(ctx context.Context, payload []byte) error {
-	return c.cmd.RPush(ctx, redisKeyPluginStatus, payload).Err()
-}
-
-// GetPluginTasks fetches all pending plugin tasks from the home cluster.
-// It returns the full list of tasks stored under the plugin-tasks key.
-func (c *Client) GetPluginTasks(ctx context.Context) ([]PluginTask, error) {
-	raw, err := c.cmd.LRange(ctx, redisKeyPluginTasks, 0, -1).Result()
-	if err != nil {
-		return nil, err
-	}
-	tasks := make([]PluginTask, 0, len(raw))
-	for _, item := range raw {
-		var task PluginTask
-		if errUnmarshal := json.Unmarshal([]byte(item), &task); errUnmarshal == nil {
-			tasks = append(tasks, task)
-		}
-	}
-	return tasks, nil
-}
-
-// marshalJSON is a convenience wrapper for json.Marshal.
