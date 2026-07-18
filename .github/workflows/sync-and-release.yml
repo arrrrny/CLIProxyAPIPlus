@@ -99,8 +99,8 @@ jobs:
 
       - name: Ensure upstream files
         run: |
-          git checkout upstream/main -- internal/home/client.go sdk/pluginstore/pluginstore.go
-          git add internal/home/client.go sdk/pluginstore/pluginstore.go
+          git checkout upstream/main -- internal/home/client.go sdk/pluginstore/pluginstore.go internal/runtime/executor/codex_websockets_executor.go
+          git add internal/home/client.go sdk/pluginstore/pluginstore.go internal/runtime/executor/codex_websockets_executor.go
           if ! git diff --cached --quiet; then
             git commit -m "fix: restore upstream files after merge"
           fi
