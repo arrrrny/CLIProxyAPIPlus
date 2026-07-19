@@ -98,6 +98,17 @@ jobs:
             git commit -m "ci: restore sync-and-release workflow"
           fi
 
+      - name: Resolve upstream files
+        run: |
+          # client.go has diverged badly between fork and upstream.
+          # Neither -X ours nor -X theirs produces a clean result here.
+          # Take the authoritative upstream version.
+          git checkout upstream/main -- internal/home/client.go
+          git add internal/home/client.go
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: restore upstream client.go after merge"
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -115,6 +126,27 @@ jobs:
       - name: Verify build
         run: |
           echo "Verifying build compiles before creating release tag..."
+          for i in 1 2 3; do
+            if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
+              exit 0
+            fi
+            echo "$output"
+            # Handle 'already declared' by checking out the file from upstream
+            files=$(echo "$output" | grep "already declared" | cut -d: -f1 | sort -u) || true
+            if [ -z "$files" ]; then
+              echo "Unfixable build errors — failing."
+              exit 1
+            fi
+            for f in $files; do
+              echo "  -> Checking out $f from upstream (duplicate declarations)"
+              git checkout upstream/main -- "$f"
+              git add "$f"
+            done
+            if ! git diff --cached --quiet; then
+              git commit -m "fix: resolve duplicate declarations after merge"
+            fi
+          done
+          # Final attempt — fail if still broken
           go build -o /dev/null ./cmd/server/...
 
       - name: Check for changes to push
