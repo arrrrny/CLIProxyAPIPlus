@@ -131,19 +131,33 @@ jobs:
               exit 0
             fi
             echo "$output"
-            # Handle 'already declared' by checking out the file from upstream
+            fixed=0
+            # Handle 'already declared' — checkout the file from upstream
             files=$(echo "$output" | grep "already declared" | cut -d: -f1 | sort -u) || true
-            if [ -z "$files" ]; then
-              echo "Unfixable build errors — failing."
-              exit 1
-            fi
             for f in $files; do
               echo "  -> Checking out $f from upstream (duplicate declarations)"
               git checkout upstream/main -- "$f"
               git add "$f"
+              fixed=1
             done
+            # Handle 'undefined' — find the defining file in upstream and checkout it
+            symbols=$(echo "$output" | grep "undefined:" | grep -o "undefined: [^ ]*" | sed 's/undefined: //' | sort -u) || true
+            for sym in $symbols; do
+              defining=$(git grep -l "func $sym\|var $sym\|const $sym\|type $sym" upstream/main -- '*.go' | head -1) || true
+              if [ -n "$defining" ]; then
+                df="${defining#upstream/main/}"
+                echo "  -> Checking out $df from upstream (defines $sym)"
+                git checkout upstream/main -- "$df"
+                git add "$df"
+                fixed=1
+              fi
+            done
+            if [ "$fixed" = "0" ]; then
+              echo "Unfixable build errors — failing."
+              exit 1
+            fi
             if ! git diff --cached --quiet; then
-              git commit -m "fix: resolve duplicate declarations after merge"
+              git commit -m "fix: resolve build errors after merge"
             fi
           done
           # Final attempt — fail if still broken
