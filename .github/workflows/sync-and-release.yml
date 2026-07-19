@@ -140,17 +140,17 @@ jobs:
               git add "$f"
               fixed=1
             done
-            # Handle 'undefined' — find the defining file in upstream and checkout it
+            # Handle 'undefined' — checkout all upstream files with the symbol
             symbols=$(echo "$output" | grep "undefined:" | grep -o "undefined: [^ ]*" | sed 's/undefined: //' | sort -u) || true
             for sym in $symbols; do
-              defining=$(git grep -l "func $sym\|var $sym\|const $sym\|type $sym" upstream/main -- '*.go' | head -1) || true
-              if [ -n "$defining" ]; then
-                df="${defining#upstream/main/}"
-                echo "  -> Checking out $df from upstream (defines $sym)"
-                git checkout upstream/main -- "$df"
-                git add "$df"
+              files=$(git grep -l "$sym" upstream/main -- '*.go') || true
+              for sf in $files; do
+                fpath="${sf#upstream/main/}"
+                echo "  -> Checking out $fpath from upstream (contains $sym)"
+                git checkout upstream/main -- "$fpath"
+                git add "$fpath"
                 fixed=1
-              fi
+              done
             done
             if [ "$fixed" = "0" ]; then
               echo "Unfixable build errors — failing."
