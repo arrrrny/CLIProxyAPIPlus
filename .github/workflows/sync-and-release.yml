@@ -41,16 +41,17 @@ jobs:
       - name: Merge upstream/main into sync
         run: |
           # Merge upstream/main into the current sync branch.
-          # -X ours prefers our changes for text conflicts but does NOT handle
-          # modify/delete conflicts (upstream deletes a file we modified).
-          git merge upstream/main -m "chore: sync with upstream/main" -X ours 2>&1 || {
+          # -X theirs prefers upstream changes for text conflicts, ensuring the
+          # merged codebase stays self-consistent and compiles. Fork-specific
+          # changes in non-conflicting hunks are still preserved.
+          git merge upstream/main -m "chore: sync with upstream/main" -X theirs 2>&1 || {
             echo "Merge had conflicts. Resolving modify/delete conflicts..."
             for file in $(git ls-files -u | awk '{print $4}' | sort -u); do
-              if git checkout --ours -- "$file" 2>/dev/null; then
-                echo "  -> $file: upstream deleted, keeping our version"
+              if git checkout --theirs -- "$file" 2>/dev/null; then
+                echo "  -> $file: upstream deleted, keeping upstream version"
                 git add -- "$file"
               else
-                # --ours failed, meaning we deleted this file — accept our deletion
+                # --theirs failed, meaning we deleted this file — accept our deletion
                 echo "  -> $file: deleted by us, keeping deletion"
                 git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
               fi
@@ -95,14 +96,6 @@ jobs:
           git add .github/workflows/sync-and-release.yml
           if ! git diff --cached --quiet; then
             git commit -m "ci: restore sync-and-release workflow"
-          fi
-
-      - name: Ensure upstream files
-        run: |
-          git checkout upstream/main -- internal/home/client.go sdk/pluginstore/pluginstore.go internal/runtime/executor/codex_websockets_executor.go
-          git add internal/home/client.go sdk/pluginstore/pluginstore.go internal/runtime/executor/codex_websockets_executor.go
-          if ! git diff --cached --quiet; then
-            git commit -m "fix: restore upstream files after merge"
           fi
 
       - name: Set up Go
