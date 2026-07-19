@@ -100,13 +100,13 @@ jobs:
 
       - name: Resolve upstream files
         run: |
-          # client.go has diverged badly between fork and upstream.
-          # Neither -X ours nor -X theirs produces a clean result here.
-          # Take the authoritative upstream version.
-          git checkout upstream/main -- internal/home/client.go
-          git add internal/home/client.go
+          # These files have diverged badly between fork and upstream from
+          # repeated auto-merges. Neither -X ours nor -X theirs produces a
+          # clean result. Take the authoritative upstream version.
+          git checkout upstream/main -- internal/home/client.go internal/runtime/executor/claude_executor.go
+          git add internal/home/client.go internal/runtime/executor/claude_executor.go
           if ! git diff --cached --quiet; then
-            git commit -m "fix: restore upstream client.go after merge"
+            git commit -m "fix: restore upstream files after merge"
           fi
 
       - name: Set up Go
