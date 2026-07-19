@@ -145,7 +145,7 @@ jobs:
             for sym in $symbols; do
               files=$(git grep -l "$sym" upstream/main -- '*.go') || true
               for sf in $files; do
-                fpath="${sf#upstream/main/}"
+                fpath="${sf#upstream/main:}"
                 echo "  -> Checking out $fpath from upstream (contains $sym)"
                 git checkout upstream/main -- "$fpath"
                 git add "$fpath"
