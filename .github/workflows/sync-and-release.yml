@@ -150,6 +150,14 @@ jobs:
               git add "$f"
               fixed=1
             done
+            # Handle 'redeclared' — checkout both files from upstream
+            files=$(echo "$output" | grep "redeclared\|other declaration" | cut -d: -f1 | sort -u) || true
+            for f in $files; do
+              echo "  -> Checking out $f from upstream (redeclared symbol)"
+              git checkout upstream/main -- "$f"
+              git add "$f"
+              fixed=1
+            done
             if [ "$fixed" = "0" ]; then
               echo "Unfixable build errors — failing."
               exit 1
