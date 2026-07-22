@@ -140,17 +140,15 @@ jobs:
               git add "$f"
               fixed=1
             done
-            # Handle 'undefined' — checkout all upstream files with the symbol
-            symbols=$(echo "$output" | grep "undefined:" | grep -o "undefined: [^ ]*" | sed 's/undefined: //' | sort -u) || true
-            for sym in $symbols; do
-              files=$(git grep -l "$sym" upstream/main -- '*.go') || true
-              for sf in $files; do
-                fpath="${sf#upstream/main:}"
-                echo "  -> Checking out $fpath from upstream (contains $sym)"
-                git checkout upstream/main -- "$fpath"
-                git add "$fpath"
-                fixed=1
-              done
+            # Handle 'undefined' — checkout the error file from upstream.
+            # The file with the error is usually missing an import or has a merge
+            # artifact reference; upstream's version has the correct code.
+            files=$(echo "$output" | grep "undefined:" | cut -d: -f1 | sort -u) || true
+            for f in $files; do
+              echo "  -> Checking out $f from upstream (undefined symbol in this file)"
+              git checkout upstream/main -- "$f"
+              git add "$f"
+              fixed=1
             done
             if [ "$fixed" = "0" ]; then
               echo "Unfixable build errors — failing."
