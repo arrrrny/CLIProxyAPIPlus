@@ -2,12 +2,17 @@ package home
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -123,20 +128,6 @@ func (c *Client) HeartbeatOK() bool {
 	return c.heartbeatOK.Load()
 }
 
-// RPushAppLog pushes an application log entry to the home Redis app-log list.
-func (c *Client) RPushAppLog(ctx context.Context, payload []byte) error {
-	if c == nil {
-		return ErrDisabled
-	}
-	c.mu.Lock()
-	cmd := c.cmd
-	c.mu.Unlock()
-	if cmd == nil {
-		return ErrNotConnected
-	}
-	return cmd.RPush(ctx, redisKeyAppLog, payload).Err()
-}
-
 func (c *Client) Close() {
 	if c == nil {
 		return
@@ -176,7 +167,7 @@ func (c *Client) addrLocked() (string, bool) {
 	if c.homeCfg.Port <= 0 {
 		return "", false
 	}
-	return fmt.Sprintf("%s:%d", host, c.homeCfg.Port), true
+	return net.JoinHostPort(host, strconv.Itoa(c.homeCfg.Port)), true
 }
 
 func (c *Client) ensureClients() error {
@@ -203,10 +194,11 @@ func (c *Client) ensureClients() error {
 		c.cmd = redis.NewClient(options)
 	}
 	if c.sub == nil {
-		c.sub = redis.NewClient(&redis.Options{
-			Addr:     addr,
-			Password: c.homeCfg.Password,
-		})
+		options, errOptions := c.redisOptionsLocked(addr)
+		if errOptions != nil {
+			return errOptions
+		}
+		c.sub = redis.NewClient(options)
 	}
 	return nil
 }
@@ -364,7 +356,23 @@ func (c *Client) Ping(ctx context.Context) error {
 	return cmd.Ping(ctx).Err()
 }
 
+func (c *Client) clusterDiscoveryEnabled() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.clusterDiscoveryEnabledLocked()
+}
+
+func (c *Client) clusterDiscoveryEnabledLocked() bool {
+	return !c.homeCfg.DisableClusterDiscovery
+}
+
 func (c *Client) refreshBestClusterNode(ctx context.Context) {
+	if !c.clusterDiscoveryEnabled() {
+		return
+	}
 	switched, errRefresh := c.refreshClusterNodes(ctx)
 	if errRefresh != nil {
 		log.Debugf("home cluster nodes unavailable: %v", errRefresh)
@@ -378,6 +386,9 @@ func (c *Client) refreshBestClusterNode(ctx context.Context) {
 }
 
 func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
+	if !c.clusterDiscoveryEnabled() {
+		return false, nil
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -390,11 +401,10 @@ func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
 		return false, errDo
 	}
 
-	var envelope clusterNodesEnvelope
-	if errUnmarshal := json.Unmarshal([]byte(raw), &envelope); errUnmarshal != nil {
-		return false, errUnmarshal
+	nodes, errParse := parseClusterNodesPayload([]byte(raw))
+	if errParse != nil {
+		return false, errParse
 	}
-	nodes := normalizeClusterNodes(envelope.Nodes)
 	if len(nodes) == 0 {
 		return false, nil
 	}
@@ -404,6 +414,28 @@ func (c *Client) refreshClusterNodes(ctx context.Context) (bool, error) {
 	c.clusterNodes = nodes
 	c.reconnectFailures = 0
 	return c.switchToNodeLocked(nodes[0]), nil
+}
+
+func parseClusterNodesPayload(raw []byte) ([]clusterNode, error) {
+	var envelope clusterNodesEnvelope
+	if errUnmarshal := json.Unmarshal(raw, &envelope); errUnmarshal != nil {
+		return nil, errUnmarshal
+	}
+	return normalizeClusterNodes(envelope.Nodes), nil
+}
+
+func (c *Client) updateClusterNodesFromPayload(raw []byte) error {
+	if c == nil || !c.clusterDiscoveryEnabled() {
+		return nil
+	}
+	nodes, errParse := parseClusterNodesPayload(raw)
+	if errParse != nil {
+		return errParse
+	}
+	c.mu.Lock()
+	c.clusterNodes = nodes
+	c.mu.Unlock()
+	return nil
 }
 
 func normalizeClusterNodes(nodes []clusterNode) []clusterNode {
@@ -452,12 +484,35 @@ func (c *Client) failoverAfterReconnectFailure() (bool, string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if !c.clusterDiscoveryEnabledLocked() {
+		c.reconnectFailures = 0
+		return false, ""
+	}
 	c.reconnectFailures++
 	if c.reconnectFailures < homeReconnectFailoverThreshold {
 		return false, ""
 	}
 	c.reconnectFailures = 0
 
+	return c.switchToNextNodeLocked()
+}
+
+func (c *Client) failoverAfterSubscriptionTimeout() (bool, string) {
+	if c == nil {
+		return false, ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.clusterDiscoveryEnabledLocked() {
+		c.reconnectFailures = 0
+		return false, ""
+	}
+	c.reconnectFailures = 0
+	return c.switchToNextNodeLocked()
+}
+
+func (c *Client) switchToNextNodeLocked() (bool, string) {
 	currentHost := strings.TrimSpace(c.homeCfg.Host)
 	currentPort := c.homeCfg.Port
 	candidates := append([]clusterNode(nil), c.clusterNodes...)
@@ -478,6 +533,13 @@ func (c *Client) failoverAfterReconnectFailure() (bool, string) {
 		}
 	}
 	return false, ""
+}
+
+func (c *Client) markSubscriptionTimeout() {
+	switched, addr := c.failoverAfterSubscriptionTimeout()
+	if switched {
+		log.Warnf("home subscription heartbeat timeout; switching to %s", addr)
+	}
 }
 
 func (c *Client) resetReconnectFailures() {
@@ -1206,7 +1268,7 @@ func (c *Client) StartConfigSubscriber(ctx context.Context, onConfig func([]byte
 		}
 
 		// Ensure the subscription is established before marking heartbeat OK.
-		if _, errReceive := pubsub.Receive(ctx); errReceive != nil {
+		if _, errReceive := pubsub.ReceiveTimeout(ctx, homeSubscriptionReceiveTimeout); errReceive != nil {
 			_ = pubsub.Close()
 			c.markReconnectFailure("subscribe")
 			sleepWithContext(ctx, homeReconnectInterval)
@@ -1217,24 +1279,50 @@ func (c *Client) StartConfigSubscriber(ctx context.Context, onConfig func([]byte
 		c.heartbeatOK.Store(true)
 
 		for {
-			msg, errMsg := pubsub.ReceiveMessage(ctx)
+			event, errMsg := pubsub.ReceiveTimeout(ctx, homeSubscriptionReceiveTimeout)
 			if errMsg != nil {
 				_ = pubsub.Close()
 				c.heartbeatOK.Store(false)
-				c.markReconnectFailure("subscription")
+				if isTimeoutError(errMsg) {
+					c.markSubscriptionTimeout()
+				} else {
+					c.markReconnectFailure("subscription")
+				}
 				sleepWithContext(ctx, homeReconnectInterval)
 				break
 			}
-			if msg == nil {
-				continue
-			}
-			if payload := strings.TrimSpace(msg.Payload); payload != "" {
-				if errApply := onConfig([]byte(payload)); errApply != nil {
-					log.Warn("failed to apply config update from home control center, ignoring")
+			switch msg := event.(type) {
+			case *redis.Message:
+				if msg == nil {
+					continue
 				}
+				if errApply := c.handleSubscriptionPayload(ctx, msg.Channel, msg.Payload, onConfig); errApply != nil {
+					if strings.EqualFold(strings.TrimSpace(msg.Channel), redisChannelCluster) {
+						log.Warn("failed to apply cluster update from home control center, ignoring")
+					} else {
+						log.Warn("failed to apply config update from home control center, ignoring")
+					}
+				}
+			case *redis.Pong:
+				c.resetReconnectFailures()
+			case *redis.Subscription:
+				continue
+			default:
+				log.Debugf("home subscription returned unsupported message type %T", event)
 			}
 		}
 	}
+}
+
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func sleepWithContext(ctx context.Context, d time.Duration) {
@@ -1254,28 +1342,3 @@ func sleepWithContext(ctx context.Context, d time.Duration) {
 		return
 	}
 }
-
-// RPushPluginStatus pushes a plugin status report payload to the home cluster's
-// plugin-status list. This is used to report plugin sync state back to the home server.
-func (c *Client) RPushPluginStatus(ctx context.Context, payload []byte) error {
-	return c.cmd.RPush(ctx, redisKeyPluginStatus, payload).Err()
-}
-
-// GetPluginTasks fetches all pending plugin tasks from the home cluster.
-// It returns the full list of tasks stored under the plugin-tasks key.
-func (c *Client) GetPluginTasks(ctx context.Context) ([]PluginTask, error) {
-	raw, err := c.cmd.LRange(ctx, redisKeyPluginTasks, 0, -1).Result()
-	if err != nil {
-		return nil, err
-	}
-	tasks := make([]PluginTask, 0, len(raw))
-	for _, item := range raw {
-		var task PluginTask
-		if errUnmarshal := json.Unmarshal([]byte(item), &task); errUnmarshal == nil {
-			tasks = append(tasks, task)
-		}
-	}
-	return tasks, nil
-}
-
-// marshalJSON is a convenience wrapper for json.Marshal.
