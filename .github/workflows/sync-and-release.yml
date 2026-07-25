@@ -32,6 +32,9 @@ jobs:
           git fetch upstream --tags --force
           git fetch upstream main
 
+      - name: Store pre-merge HEAD
+        run: echo "PRE_MERGE=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
       - name: Get latest upstream tag
         id: upstream
         run: |
@@ -106,7 +109,10 @@ jobs:
           #   fork's payload_helpers_upstream.go split is now redundant
           # - openai_openai_request.go has merge artifacts
           git checkout upstream/main -- internal/home/client.go internal/runtime/executor/claude_executor.go internal/runtime/executor/helps/payload_helpers.go internal/translator/openai/openai/chat-completions/openai_openai_request.go
-          git add internal/home/client.go internal/runtime/executor/claude_executor.go internal/runtime/executor/helps/payload_helpers.go internal/translator/openai/openai/chat-completions/openai_openai_request.go
+          git add internal/home/client.go internal/runtime/executor/claude_executor.go internal/runtime/executor/helps/payload_helpers.go internal/runtime/executor/helps/usage_helpers.go internal/translator/openai/openai/chat-completions/openai_openai_request.go
+          # Restore fork-specific functions that upstream doesn't have
+          git checkout $PRE_MERGE -- internal/runtime/executor/helps/usage_helpers.go 2>/dev/null || true
+          git add internal/runtime/executor/helps/usage_helpers.go
           # Remove the fork's split-off file — upstream now has these functions directly
           if [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ]; then
             git rm internal/runtime/executor/helps/payload_helpers_upstream.go
@@ -142,8 +148,8 @@ jobs:
             files=$(echo "$output" | grep "already declared" | cut -d: -f1 | sort -u) || true
             for f in $files; do
               echo "  -> Checking out $f from upstream (duplicate declarations)"
-              git checkout upstream/main -- "$f"
-              git add "$f"
+              git checkout upstream/main -- "$f" 2>/dev/null || true
+              git add "$f" 2>/dev/null || true
               fixed=1
             done
             # Handle 'undefined' — checkout the error file from upstream.
@@ -152,16 +158,16 @@ jobs:
             files=$(echo "$output" | grep "undefined:" | cut -d: -f1 | sort -u) || true
             for f in $files; do
               echo "  -> Checking out $f from upstream (undefined symbol in this file)"
-              git checkout upstream/main -- "$f"
-              git add "$f"
+              git checkout upstream/main -- "$f" 2>/dev/null || true
+              git add "$f" 2>/dev/null || true
               fixed=1
             done
             # Handle 'redeclared' — checkout both files from upstream
             files=$(echo "$output" | grep -E "redeclared|other declaration" | cut -d: -f1 | sort -u) || true
             for f in $files; do
               echo "  -> Checking out $f from upstream (redeclared symbol)"
-              git checkout upstream/main -- "$f"
-              git add "$f"
+              git checkout upstream/main -- "$f" 2>/dev/null || true
+              git add "$f" 2>/dev/null || true
               fixed=1
             done
             if [ "$fixed" = "0" ]; then
