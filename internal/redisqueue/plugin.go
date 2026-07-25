@@ -52,21 +52,16 @@ func (p *usageQueuePlugin) HandleUsage(ctx context.Context, record coreusage.Rec
 	apiKey := strings.TrimSpace(record.APIKey)
 	requestID := strings.TrimSpace(internallogging.GetRequestID(ctx))
 
+	usageDetail := coreusage.EnsureTokenBreakdownForProvider(record.Detail, record.Provider, record.ExecutorType)
 	tokens := tokenStats{
-		InputTokens:            record.Detail.InputTokens,
-		OutputTokens:           record.Detail.OutputTokens,
-		ReasoningTokens:        record.Detail.ReasoningTokens,
-		CachedTokens:           record.Detail.CachedTokens,
-		CacheReadTokens:        record.Detail.CacheReadTokens,
+		InputTokens:            usageDetail.InputTokens,
+		OutputTokens:           usageDetail.OutputTokens,
+		ReasoningTokens:        usageDetail.ReasoningTokens,
+		CachedTokens:           usageDetail.CachedTokens,
+		CacheReadTokens:        usageDetail.CacheReadTokens,
 		CacheReadTokensPresent: true,
-		CacheCreationTokens:    record.Detail.CacheCreationTokens,
-		TotalTokens:            record.Detail.TotalTokens,
-	}
-	if tokens.TotalTokens == 0 {
-		tokens.TotalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens
-	}
-	if tokens.TotalTokens == 0 {
-		tokens.TotalTokens = tokens.InputTokens + tokens.OutputTokens + tokens.ReasoningTokens + tokens.CachedTokens
+		CacheCreationTokens:    usageDetail.CacheCreationTokens,
+		TotalTokens:            usageDetail.TotalTokens,
 	}
 
 	failed := record.Failed
@@ -86,14 +81,20 @@ func (p *usageQueuePlugin) HandleUsage(ctx context.Context, record coreusage.Rec
 	}
 
 	payload, err := json.Marshal(queuedUsageDetail{
-		requestDetail: detail,
-		Provider:      provider,
-		Model:         modelName,
-		Alias:         aliasName,
-		Endpoint:      resolveEndpoint(ctx),
-		AuthType:      authType,
-		APIKey:        apiKey,
-		RequestID:     requestID,
+		requestDetail:       detail,
+		AccountingVersion:   coreusage.TokenAccountingSchemaVersion,
+		TokenBreakdown:      usageDetail.TokenBreakdown,
+		Provider:            provider,
+		ExecutorType:        executorType,
+		Model:               modelName,
+		Alias:               aliasName,
+		Endpoint:            resolveEndpoint(ctx),
+		AuthType:            authType,
+		APIKey:              apiKey,
+		RequestID:           requestID,
+		ReasoningEffort:     reasoningEffort,
+		ServiceTier:         serviceTier,
+		ResponseServiceTier: responseServiceTier,
 	})
 	if err != nil {
 		return
@@ -103,13 +104,19 @@ func (p *usageQueuePlugin) HandleUsage(ctx context.Context, record coreusage.Rec
 
 type queuedUsageDetail struct {
 	requestDetail
-	Provider  string `json:"provider"`
-	Model     string `json:"model"`
-	Alias     string `json:"alias"`
-	Endpoint  string `json:"endpoint"`
-	AuthType  string `json:"auth_type"`
-	APIKey    string `json:"api_key"`
-	RequestID string `json:"request_id"`
+	AccountingVersion   int                      `json:"accounting_version"`
+	TokenBreakdown      coreusage.TokenBreakdown `json:"token_breakdown"`
+	Provider            string                   `json:"provider"`
+	ExecutorType        string                   `json:"executor_type"`
+	Model               string                   `json:"model"`
+	Alias               string                   `json:"alias"`
+	Endpoint            string                   `json:"endpoint"`
+	AuthType            string                   `json:"auth_type"`
+	APIKey              string                   `json:"api_key"`
+	RequestID           string                   `json:"request_id"`
+	ReasoningEffort     string                   `json:"reasoning_effort"`
+	ServiceTier         string                   `json:"service_tier"`
+	ResponseServiceTier string                   `json:"response_service_tier,omitempty"`
 }
 
 type requestDetail struct {

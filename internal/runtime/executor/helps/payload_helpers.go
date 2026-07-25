@@ -115,9 +115,8 @@ func ApplyPayloadConfigWithRoot(cfg *config.Config, model, protocol, root string
 					if fullPath == "" {
 						continue
 					}
-					updated, errSet := sjson.SetBytes(out, fullPath, value)
-					if errSet != nil {
-						continue
+					for _, resolvedPath := range resolvePayloadRulePaths(out, fullPath) {
+						out = setPayloadValueIfDifferent(out, resolvedPath, value)
 					}
 					out = updated
 				}
@@ -137,9 +136,8 @@ func ApplyPayloadConfigWithRoot(cfg *config.Config, model, protocol, root string
 					if !ok {
 						continue
 					}
-					updated, errSet := sjson.SetRawBytes(out, fullPath, rawValue)
-					if errSet != nil {
-						continue
+					for _, resolvedPath := range resolvePayloadRulePaths(out, fullPath) {
+						out = SetRawIfDifferent(out, resolvedPath, rawValue)
 					}
 					out = updated
 				}
@@ -535,23 +533,64 @@ func removeToolTypeFromToolsArray(payload []byte, toolsPath string, toolType str
 	if !tools.Exists() || !tools.IsArray() {
 		return payload
 	}
+	toolItems := tools.Array()
 	removed := false
-	filtered := []byte(`[]`)
-	for _, tool := range tools.Array() {
+	for _, tool := range toolItems {
 		if tool.Get("type").String() == toolType {
 			removed = true
-			continue
+			break
 		}
-		updated, errSet := sjson.SetRawBytes(filtered, "-1", []byte(tool.Raw))
-		if errSet != nil {
-			continue
-		}
-		filtered = updated
 	}
 	if !removed {
 		return payload
 	}
-	updated, errSet := sjson.SetRawBytes(payload, toolsPath, filtered)
+	filtered := make([][]byte, 0, len(toolItems))
+	for _, tool := range toolItems {
+		if tool.Get("type").String() != toolType {
+			filtered = append(filtered, []byte(tool.Raw))
+		}
+	}
+	updated, errSet := sjson.SetRawBytes(payload, toolsPath, JoinRawJSONArray(filtered))
+	if errSet != nil {
+		return payload
+	}
+	return updated
+}
+
+func setPayloadValueIfDifferent(payload []byte, path string, value any) []byte {
+	current := gjson.GetBytes(payload, path)
+	switch typed := value.(type) {
+	case string:
+		if current.Type == gjson.String && current.String() == typed {
+			return payload
+		}
+	case bool:
+		if (typed && current.Type == gjson.True) || (!typed && current.Type == gjson.False) {
+			return payload
+		}
+	case nil:
+		if current.Raw == "null" {
+			return payload
+		}
+	default:
+		expectedJSON, errSet := sjson.SetBytes([]byte(`{}`), "value", value)
+		if errSet != nil {
+			return payload
+		}
+		expected := gjson.GetBytes(expectedJSON, "value")
+		if expected.Raw == "" {
+			return payload
+		}
+		if len(current.Indexes) == 0 && current.Raw == expected.Raw {
+			return payload
+		}
+		updated, errSet := sjson.SetRawBytes(payload, path, []byte(expected.Raw))
+		if errSet != nil {
+			return payload
+		}
+		return updated
+	}
+	updated, errSet := sjson.SetBytes(payload, path, value)
 	if errSet != nil {
 		return payload
 	}
