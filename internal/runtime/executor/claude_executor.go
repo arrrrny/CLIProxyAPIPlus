@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/textproto"
 	"strings"
 	"time"
 
@@ -309,7 +308,7 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 
 	requestedModel := helps.PayloadRequestedModel(opts, req.Model)
 	requestPath := helps.PayloadRequestPath(opts)
-	body = helps.ApplyPayloadConfigWithRoot(e.cfg, baseModel, to.String(), "", body, originalTranslated, requestedModel, requestPath)
+	body = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", body, originalTranslated, requestedModel, requestPath, opts.Headers)
 	body = ensureModelMaxTokens(body, baseModel)
 
 	// Disable thinking if tool_choice forces tool use (Anthropic API constraint)
@@ -504,7 +503,7 @@ func (e *ClaudeExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.A
 
 	requestedModel := helps.PayloadRequestedModel(opts, req.Model)
 	requestPath := helps.PayloadRequestPath(opts)
-	body = helps.ApplyPayloadConfigWithRoot(e.cfg, baseModel, to.String(), "", body, originalTranslated, requestedModel, requestPath)
+	body = helps.ApplyPayloadConfigWithRequest(e.cfg, baseModel, to.String(), from.String(), "", body, originalTranslated, requestedModel, requestPath, opts.Headers)
 	body = ensureModelMaxTokens(body, baseModel)
 
 	// Disable thinking if tool_choice forces tool use (Anthropic API constraint)
@@ -1173,21 +1172,6 @@ func applyClaudeHeaders(r *http.Request, auth *cliproxyauth.Auth, apiKey string,
 	}
 	if !strings.Contains(baseBetas, "interleaved-thinking") {
 		baseBetas += ",interleaved-thinking-2025-05-14"
-	}
-
-	hasClaude1MHeader := false
-	if ginHeaders != nil {
-		if _, ok := ginHeaders[textproto.CanonicalMIMEHeaderKey("X-CPA-CLAUDE-1M")]; ok {
-			hasClaude1MHeader = true
-		}
-	}
-	// Also check auth attributes — GitLab Duo sets gitlab_duo_force_context_1m
-	// when routing through the Anthropic gateway, but the gin headers won't have
-	// X-CPA-CLAUDE-1M because the request is internally constructed.
-	if !hasClaude1MHeader && auth != nil && auth.Attributes != nil {
-		if auth.Attributes["gitlab_duo_force_context_1m"] == "true" {
-			hasClaude1MHeader = true
-		}
 	}
 
 	// Merge extra betas from request body and request flags.
@@ -2082,7 +2066,7 @@ Prefer acting on the user's task over describing product-specific workflows.`)
 func buildTextBlock(text string, cacheControl map[string]string) string {
 	block := []byte(`{"type":"text"}`)
 	block, _ = sjson.SetBytes(block, "text", text)
-	if len(cacheControl) > 0 {
+	if cacheControl != nil && len(cacheControl) > 0 {
 		// Build cache_control JSON manually to avoid sjson map marshaling issues.
 		// sjson.SetBytes with map[string]string may not produce expected structure.
 		cc := `{"type":"ephemeral"`
