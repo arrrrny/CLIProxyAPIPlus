@@ -78,54 +78,18 @@ jobs:
 
       - name: Restore upstream files
         run: |
-          # Restore config.go and parse.go from pre-merge (preserves fork's
-          # kiro/copilot/z.ai fields and avoids CredentialConcurrency references).
-          git checkout HEAD^1 -- internal/config/config.go internal/config/parse.go 2>/dev/null || true
-          # Checkout files from upstream that need their upstream versions
-          # (fixes imports, variable declarations, function signatures).
-          for f in \
-            internal/redisqueue/plugin.go \
-            internal/api/middleware/response_writer.go \
-            internal/translator/openai/openai/chat-completions/openai_openai_request.go; do
-            git checkout upstream/main -- "$f" 2>/dev/null || true
-          done
-          # Checkout types.go from upstream (bypasses gitignore via git show)
-          git show upstream/main:sdk/cliproxy/executor/types.go > sdk/cliproxy/executor/types.go 2>/dev/null || true
-          git add -f sdk/cliproxy/executor/types.go 2>/dev/null || true
-          # Delete config_*.go (redeclared) and codex_live.go (missing types)
-          for f in internal/config/config_*.go internal/config/codex_live.go internal/config/codex_live_test.go; do
-            [ -f "$f" ] && git rm "$f" 2>/dev/null || true
-          done
-          # Restore auth directory from pre-merge (preserves fork's kiro/auth features)
-          git checkout HEAD^1 -- sdk/cliproxy/auth/ 2>/dev/null || true
-          git add -f sdk/cliproxy/auth/ 2>/dev/null || true
-          # Delete new upstream auth files that git checkout couldn't remove (gitignore)
-          for f in sdk/cliproxy/auth/conductor_*.go sdk/cliproxy/auth/home_*.go; do
-            if [ -f "$f" ] && [ "$(basename "$f")" != "conductor.go" ]; then
-              git rm -f "$f" 2>/dev/null || true
-            fi
-          done
-          [ -f internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go ] && git rm internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go 2>/dev/null || true
-          [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
-          # Restore directories from pre-merge to avoid cascading dependency errors
-          # from new upstream features the fork doesn't maintain.
-          git checkout HEAD^1 -- \
-            internal/watcher/diff/ \
-            sdk/api/handlers/ \
-            internal/store/ \
-            internal/util/ \
-            2>/dev/null || true
-          # Delete new handler files that duplicate functions from handlers.go
-          for f in sdk/api/handlers/handlers_*.go; do
-            if [ -f "$f" ] && [ "$(basename "$f")" != "handlers.go" ]; then
-              git rm "$f" 2>/dev/null || true
-            fi
-          done
-          # Delete new upstream files that reference deleted auth types
-          [ -f internal/store/postgres_cooldown_store.go ] && git rm internal/store/postgres_cooldown_store.go 2>/dev/null || true
-          git add -A 2>/dev/null || true
+          # Revert the entire working tree to pre-merge fork state.
+          # This preserves ALL fork customizations (kiro, copilot, z.ai, etc.)
+          # and removes new upstream files we don't need.
+          # We only keep the workflow file update.
+          git checkout HEAD^1 -- . 2>/dev/null || true
+          # Remove new upstream files that don't exist in HEAD^1
+          git clean -fd 2>/dev/null || true
+          # Restore the current workflow file
+          git checkout HEAD -- .github/workflows/sync-and-release.yml 2>/dev/null || true
+          git add .github/workflows/sync-and-release.yml 2>/dev/null || true
           if ! git diff --cached --quiet; then
-            git commit -m "fix: restore fork config after merge"
+            git commit -m "fix: restore fork files after merge"
           fi
 
       - name: Restore sync-and-release workflow
