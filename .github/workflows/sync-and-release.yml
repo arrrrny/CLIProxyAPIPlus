@@ -90,7 +90,11 @@ jobs:
               git rm "$f" 2>/dev/null || true
             fi
           done
+          # Delete known upstream files that reference types from deleted config_*.go
+          # (CodexLiveMediaRelayConfig was in config_types.go which we removed).
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
+          # Delete known upstream files that reference types from deleted config_*.go
+          git rm internal/config/codex_live.go internal/config/codex_live_test.go 2>/dev/null || true
           git add -A 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "fix: restore fork config after merge"
@@ -121,47 +125,20 @@ jobs:
       - name: Verify build
         run: |
           echo "Verifying build compiles before creating release tag..."
-          phase=0
           for i in 1 2 3 4 5; do
             if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
               exit 0
             fi
             echo "$output"
             fixed=0
-            if [ "$phase" = "0" ]; then
-              # Checkout: try upstream for all error files (fixes imports, signatures, etc.)
-              files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
-              for f in $files; do
-                echo "  -> Checking out $f from upstream"
-                git checkout upstream/main -- "$f" 2>/dev/null || true
-                git add "$f" 2>/dev/null || true
-                fixed=1
-              done
-              phase=1
-            else
-              # Delete: for undefined errors that checkout didn't fix
-              if echo "$output" | grep -q "undefined:"; then
-                files=$(echo "$output" | grep "undefined:" | cut -d: -f1 | sort -u)
-                for f in $files; do
-                  if [ "$f" != "internal/config/config.go" ]; then
-                    echo "  -> Deleting $f (references undefined type)"
-                    git rm "$f" 2>/dev/null || rm -f "$f"
-                    fixed=1
-                  fi
-                done
-              fi
-              # Also handle non-undefined errors that weren't fixed by checkout
-              files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "undefined:" | grep -v "internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
-              if [ -n "$files" ]; then
-                for f in $files; do
-                  echo "  -> Checking out $f from upstream (other error)"
-                  git checkout upstream/main -- "$f" 2>/dev/null || true
-                  git add "$f" 2>/dev/null || true
-                  fixed=1
-                done
-              fi
-              phase=0
-            fi
+            # Checkout all error files from upstream (fixes imports, signatures, etc.)
+            files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
+            for f in $files; do
+              echo "  -> Checking out $f from upstream"
+              git checkout upstream/main -- "$f" 2>/dev/null || true
+              git add "$f" 2>/dev/null || true
+              fixed=1
+            done
             if [ "$fixed" = "0" ]; then
               echo "Unfixable build errors — failing."
               exit 1
