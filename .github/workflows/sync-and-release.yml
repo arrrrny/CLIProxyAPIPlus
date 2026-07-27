@@ -107,9 +107,14 @@ jobs:
           done
           [ -f internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go ] && git rm internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go 2>/dev/null || true
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
-          # Restore watcher/diff and sdk/api/handlers from pre-merge (avoids
-          # references to new upstream auth/config features the fork doesn't have).
-          git checkout HEAD^1 -- internal/watcher/diff/ sdk/api/handlers/ 2>/dev/null || true
+          # Restore directories from pre-merge to avoid cascading dependency errors
+          # from new upstream features the fork doesn't maintain.
+          git checkout HEAD^1 -- \
+            internal/watcher/diff/ \
+            sdk/api/handlers/ \
+            internal/store/ \
+            internal/util/ \
+            2>/dev/null || true
           # Delete new handler files that duplicate functions from handlers.go
           for f in sdk/api/handlers/handlers_*.go; do
             if [ -f "$f" ] && [ "$(basename "$f")" != "handlers.go" ]; then
