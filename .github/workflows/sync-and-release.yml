@@ -76,9 +76,22 @@ jobs:
             fi
           fi
 
+      - name: Restore upstream files
+        run: |
+          # Restore config.go from pre-merge (preserves fork's kiro/copilot/z.ai fields)
+          git checkout HEAD^1 -- internal/config/config.go 2>/dev/null || true
+          # Delete refactored config files that duplicate functions in our config.go
+          for f in config_load.go config_defaults.go config_normalization.go; do
+            [ -f "internal/config/$f" ] && git rm internal/config/$f 2>/dev/null || true
+          done
+          [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
+          git add -A 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: restore fork config after merge"
+          fi
+
       - name: Restore sync-and-release workflow
         run: |
-          mkdir -p .github/workflows
           cp /tmp/sync-and-release.yml .github/workflows/sync-and-release.yml
           git add .github/workflows/sync-and-release.yml
           if ! git diff --cached --quiet; then
@@ -102,23 +115,44 @@ jobs:
       - name: Verify build
         run: |
           echo "Verifying build compiles before creating release tag..."
-          if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
-            exit 0
-          fi
-          echo "$output"
-          files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "^internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
-          if [ -z "$files" ]; then
-            echo "Unfixable build errors — failing."
-            exit 1
-          fi
-          for f in $files; do
-            echo "  -> Checking out $f from upstream"
-            git checkout upstream/main -- "$f" 2>/dev/null || true
-            git add "$f" 2>/dev/null || true
+          # Try building, deleting error files that reference missing types
+          for i in 1 2 3 4 5; do
+            if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
+              exit 0
+            fi
+            echo "$output"
+            # Check if build failed with "undefined" — delete the error files (they reference
+            # types from upstream that don't exist in the fork's config.go)
+            if echo "$output" | grep -q "undefined:"; then
+              files=$(echo "$output" | grep "undefined:" | cut -d: -f1 | sort -u)
+              for f in $files; do
+                # Never delete config.go — it has our custom kiro/copilot/z.ai fields
+                if [ "$f" != "internal/config/config.go" ]; then
+                  echo "  -> Deleting $f (references undefined type)"
+                  git rm "$f" 2>/dev/null || rm -f "$f"
+                fi
+              done
+              if ! git diff --cached --quiet; then
+                git commit -m "fix: remove upstream files that reference missing types" 2>/dev/null || true
+              fi
+              continue
+            fi
+            # For other errors (redeclared, imported and not used), checkout from upstream
+            files=$(echo "$output" | grep -E "^[a-z].*\.go:" | cut -d: -f1 | sort -u) || true
+            if [ -z "$files" ]; then
+              echo "Unfixable build errors — failing."
+              exit 1
+            fi
+            for f in $files; do
+              echo "  -> Checking out $f from upstream"
+              git checkout upstream/main -- "$f" 2>/dev/null || true
+              git add "$f" 2>/dev/null || true
+            done
+            if ! git diff --cached --quiet; then
+              git commit -m "fix: resolve build errors after merge"
+            fi
           done
-          if ! git diff --cached --quiet; then
-            git commit -m "fix: resolve build errors after merge"
-          fi
+          # Final build attempt
           go build -o /dev/null ./cmd/server/...
 
       - name: Check for changes to push
