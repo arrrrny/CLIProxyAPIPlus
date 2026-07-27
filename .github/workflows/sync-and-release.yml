@@ -78,8 +78,11 @@ jobs:
 
       - name: Restore upstream files
         run: |
-          # Restore config.go from pre-merge (preserves fork's kiro/copilot/z.ai fields)
-          git checkout HEAD^1 -- internal/config/config.go 2>/dev/null || true
+          # Restore config.go and parse.go from pre-merge (preserves fork's
+          # kiro/copilot/z.ai fields and avoids CredentialConcurrency references).
+          git checkout HEAD^1 -- internal/config/config.go internal/config/parse.go 2>/dev/null || true
+          # Checkout openai_openai_request.go from upstream (has correct fmt import)
+          git checkout upstream/main -- internal/translator/openai/openai/chat-completions/openai_openai_request.go 2>/dev/null || true
           # Delete all refactored config_*.go files — their types/functions
           # are already in our restored config.go (from pre-merge).
           for f in internal/config/config_*.go; do
