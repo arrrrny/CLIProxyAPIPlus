@@ -81,20 +81,29 @@ jobs:
           # Restore config.go and parse.go from pre-merge (preserves fork's
           # kiro/copilot/z.ai fields and avoids CredentialConcurrency references).
           git checkout HEAD^1 -- internal/config/config.go internal/config/parse.go 2>/dev/null || true
-          # Checkout openai_openai_request.go from upstream (has correct fmt import)
-          git checkout upstream/main -- internal/translator/openai/openai/chat-completions/openai_openai_request.go 2>/dev/null || true
-          # Delete all refactored config_*.go files — their types/functions
-          # are already in our restored config.go (from pre-merge).
-          for f in internal/config/config_*.go; do
-            if [ -f "$f" ] && [ "$(basename "$f")" != "config.go" ]; then
-              git rm "$f" 2>/dev/null || true
-            fi
+          # Checkout files from upstream that need their upstream versions
+          # (fixes imports, variable declarations, function signatures).
+          for f in \
+            internal/redisqueue/plugin.go \
+            internal/api/middleware/response_writer.go \
+            internal/translator/openai/openai/chat-completions/openai_openai_request.go; do
+            git checkout upstream/main -- "$f" 2>/dev/null || true
           done
-          # Delete known upstream files that reference types from deleted config_*.go
-          # (CodexLiveMediaRelayConfig was in config_types.go which we removed).
-          [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
-          # Delete known upstream files that reference types from deleted config_*.go
-          git rm internal/config/codex_live.go internal/config/codex_live_test.go 2>/dev/null || true
+          # Delete files that reference upstream-specific config fields/types
+          # that the fork doesn't have (these are upstream features we don't need).
+          for f in \
+            internal/config/config_*.go \
+            internal/config/codex_live.go \
+            internal/config/codex_live_test.go \
+            internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go \
+            internal/runtime/executor/helps/payload_helpers_upstream.go; do
+            [ -f "$f" ] && git rm "$f" 2>/dev/null || true
+          done
+          # sdk/cliproxy/ is gitignored — delete files that reference
+          # config fields/types the fork doesn't have (upstream features).
+          for f in sdk/cliproxy/auth/conductor_home.go sdk/cliproxy/auth/conductor_execution.go; do
+            [ -f "$f" ] && git rm -f "$f" 2>/dev/null || true
+          done
           git add -A 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "fix: restore fork config after merge"
