@@ -99,6 +99,12 @@ jobs:
           # Restore auth directory from pre-merge (preserves fork's kiro/auth features)
           git checkout HEAD^1 -- sdk/cliproxy/auth/ 2>/dev/null || true
           git add -f sdk/cliproxy/auth/ 2>/dev/null || true
+          # Delete new upstream auth files that git checkout couldn't remove (gitignore)
+          for f in sdk/cliproxy/auth/conductor_*.go sdk/cliproxy/auth/home_*.go; do
+            if [ -f "$f" ] && [ "$(basename "$f")" != "conductor.go" ]; then
+              git rm -f "$f" 2>/dev/null || true
+            fi
+          done
           [ -f internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go ] && git rm internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go 2>/dev/null || true
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
           git add -A 2>/dev/null || true
