@@ -377,10 +377,16 @@ func ConvertGeminiRequestToClaude(modelName string, inputRawJSON []byte, stream 
 						anthropicTool, _ = sjson.SetBytes(anthropicTool, "description", desc.String())
 					}
 					if params := funcDecl.Get("parameters"); params.Exists() {
-						cleaned := normalizeClaudeToolSchema(params)
+						// Clean up the parameters schema for Claude Code compatibility
+						cleaned := []byte(params.Raw)
+						cleaned, _ = sjson.SetBytes(cleaned, "additionalProperties", false)
+						cleaned, _ = sjson.SetBytes(cleaned, "$schema", "http://json-schema.org/draft-07/schema#")
 						anthropicTool, _ = sjson.SetRawBytes(anthropicTool, "input_schema", cleaned)
 					} else if params = funcDecl.Get("parametersJsonSchema"); params.Exists() {
-						cleaned := normalizeClaudeToolSchema(params)
+						// Clean up the parameters schema for Claude Code compatibility
+						cleaned := []byte(params.Raw)
+						cleaned, _ = sjson.SetBytes(cleaned, "additionalProperties", false)
+						cleaned, _ = sjson.SetBytes(cleaned, "$schema", "http://json-schema.org/draft-07/schema#")
 						anthropicTool, _ = sjson.SetRawBytes(anthropicTool, "input_schema", cleaned)
 					}
 
@@ -410,29 +416,12 @@ func ConvertGeminiRequestToClaude(modelName string, inputRawJSON []byte, stream 
 	return out
 }
 
-func normalizeClaudeToolSchema(parameters gjson.Result) []byte {
-	cleaned := []byte(parameters.Raw)
-	if parameters.Get("additionalProperties").Type != gjson.False {
-		cleaned, _ = sjson.SetBytes(cleaned, "additionalProperties", false)
-	}
-	const schema = "http://json-schema.org/draft-07/schema#"
-	currentSchema := parameters.Get("$schema")
-	if currentSchema.Type != gjson.String || currentSchema.String() != schema {
-		cleaned, _ = sjson.SetBytes(cleaned, "$schema", schema)
-	}
-	return cleaned
-}
-
 func lowercaseClaudeToolSchemaTypes(tool []byte) []byte {
 	var pathsToLower []string
 	util.Walk(gjson.ParseBytes(tool), "", "type", &pathsToLower)
 	for _, path := range pathsToLower {
 		typeValue := gjson.GetBytes(tool, path)
-		normalizedType := strings.ToLower(typeValue.String())
-		if typeValue.Type == gjson.String && normalizedType == typeValue.String() {
-			continue
-		}
-		tool, _ = sjson.SetBytes(tool, path, normalizedType)
+		tool, _ = sjson.SetBytes(tool, path, strings.ToLower(typeValue.String()))
 	}
 	return tool
 }

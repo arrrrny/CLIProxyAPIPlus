@@ -269,26 +269,13 @@ func (c *dynamicLibraryClient) Call(ctx context.Context, method string, request 
 	if len(request) > 0 {
 		requestPtr = uintptr(unsafe.Pointer(&request[0]))
 	}
-	responseMem, errAlloc := windows.LocalAlloc(
-		windows.LMEM_FIXED|windows.LMEM_ZEROINIT,
-		uint32(unsafe.Sizeof(windowsBuffer{})),
-	)
-	if errAlloc != nil {
-		return nil, fmt.Errorf("allocate plugin response buffer: %w", errAlloc)
-	}
-	if responseMem == 0 {
-		return nil, fmt.Errorf("allocate plugin response buffer")
-	}
-	defer func() {
-		_, _ = windows.LocalFree(windows.Handle(responseMem))
-	}()
-	response := (*windowsBuffer)(unsafe.Pointer(responseMem))
+	var response windowsBuffer
 	rc, _, _ := syscall.SyscallN(
 		c.api.call,
 		uintptr(unsafe.Pointer(methodBytes)),
 		requestPtr,
 		uintptr(len(request)),
-		responseMem,
+		uintptr(unsafe.Pointer(&response)),
 	)
 	var out []byte
 	if response.ptr != 0 && response.len > 0 {

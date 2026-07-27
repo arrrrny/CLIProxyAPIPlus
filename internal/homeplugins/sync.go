@@ -33,10 +33,6 @@ type PluginLoadInspector interface {
 	PluginRegistered(id string) bool
 }
 
-type contextualPluginUnloader interface {
-	UnloadPluginContext(ctx context.Context, id string) bool
-}
-
 type SyncReport struct {
 	SchemaVersion int                   `json:"schema_version"`
 	TaskID        uint                  `json:"task_id,omitempty"`
@@ -368,9 +364,7 @@ func installManifest(ctx context.Context, client sdkpluginstore.Client, manifest
 }
 
 func DeleteWithReport(ctx context.Context, cfg *config.Config, pluginRuntime PluginRuntime, taskID uint, pluginID string) SyncReport {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	_ = ctx
 	platform := CurrentPlatform()
 	report := newSyncReport(platform)
 	report.TaskID = taskID
@@ -378,13 +372,6 @@ func DeleteWithReport(ctx context.Context, cfg *config.Config, pluginRuntime Plu
 	report.Phase = pluginTaskPhaseDelete
 	pluginID = strings.TrimSpace(pluginID)
 	status := PluginInstallStatus{ID: pluginID}
-	if errContext := ctx.Err(); errContext != nil {
-		status.InstallStatus = pluginInstallStatusFailed
-		status.Error = errContext.Error()
-		report.Plugins = append(report.Plugins, status)
-		finishReport(&report, errContext)
-		return report
-	}
 	if cfg == nil {
 		status.InstallStatus = pluginInstallStatusFailed
 		status.Error = "home plugins: config is nil"
@@ -401,14 +388,7 @@ func DeleteWithReport(ctx context.Context, cfg *config.Config, pluginRuntime Plu
 		finishReport(&report, errPluginsDir)
 		return report
 	}
-	if errContext := ctx.Err(); errContext != nil {
-		status.InstallStatus = pluginInstallStatusFailed
-		status.Error = errContext.Error()
-		report.Plugins = append(report.Plugins, status)
-		finishReport(&report, errContext)
-		return report
-	}
-	path, deleted, errDelete := deletePluginArtifact(ctx, root, pluginID, pluginRuntime)
+	path, deleted, errDelete := deletePluginArtifact(root, pluginID, pluginRuntime)
 	status.Path = strings.TrimSpace(path)
 	switch {
 	case errDelete != nil:
@@ -424,13 +404,7 @@ func DeleteWithReport(ctx context.Context, cfg *config.Config, pluginRuntime Plu
 	return report
 }
 
-func deletePluginArtifact(ctx context.Context, root string, id string, pluginRuntime PluginRuntime) (string, bool, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if errContext := ctx.Err(); errContext != nil {
-		return "", false, errContext
-	}
+func deletePluginArtifact(root string, id string, pluginRuntime PluginRuntime) (string, bool, error) {
 	id = strings.TrimSpace(id)
 	if !validPluginFileID(id) {
 		return "", false, fmt.Errorf("invalid plugin id %q", id)
@@ -439,31 +413,16 @@ func deletePluginArtifact(ctx context.Context, root string, id string, pluginRun
 	if errPaths != nil {
 		return "", false, errPaths
 	}
-	if errContext := ctx.Err(); errContext != nil {
-		return "", false, errContext
-	}
 	if len(paths) == 0 {
 		return "", false, nil
 	}
 	if pluginRuntime != nil && pluginRuntime.PluginBusy(id) {
-		if errContext := ctx.Err(); errContext != nil {
-			return paths[0], false, errContext
-		}
-		unloaded := false
-		if contextual, ok := pluginRuntime.(contextualPluginUnloader); ok {
-			unloaded = contextual.UnloadPluginContext(ctx, id)
-		} else {
-			unloaded = pluginRuntime.UnloadPlugin(id)
-		}
-		if !unloaded && pluginRuntime.PluginBusy(id) {
+		if !pluginRuntime.UnloadPlugin(id) && pluginRuntime.PluginBusy(id) {
 			return paths[0], false, sdkpluginstore.ErrLoadedPluginLocked
 		}
 	}
 	deleted := false
 	for _, path := range paths {
-		if errContext := ctx.Err(); errContext != nil {
-			return paths[0], deleted, errContext
-		}
 		if errRemove := os.Remove(path); errRemove != nil {
 			if errors.Is(errRemove, os.ErrNotExist) {
 				continue
@@ -471,9 +430,6 @@ func deletePluginArtifact(ctx context.Context, root string, id string, pluginRun
 			return paths[0], deleted, errRemove
 		}
 		deleted = true
-		if errContext := ctx.Err(); errContext != nil {
-			return paths[0], deleted, errContext
-		}
 	}
 	return paths[0], deleted, nil
 }

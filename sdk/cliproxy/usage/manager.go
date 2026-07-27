@@ -68,7 +68,6 @@ type Detail struct {
 	CacheReadTokens     int64
 	CacheCreationTokens int64
 	TotalTokens         int64
-	TokenBreakdown      TokenBreakdown
 	ResponseServiceTier string
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,17 +25,6 @@ func resetAntigravityCreditsRetryState() {
 	antigravityShortCooldownByAuth = sync.Map{}
 	antigravityCreditsBalanceByAuth = sync.Map{}
 	antigravityCreditsHintRefreshByID = sync.Map{}
-}
-
-type closeSignalReadCloser struct {
-	io.ReadCloser
-	closed chan<- struct{}
-}
-
-func (c *closeSignalReadCloser) Close() error {
-	errClose := c.ReadCloser.Close()
-	close(c.closed)
-	return errClose
 }
 
 type fakeAntigravityKVClient struct {
@@ -350,7 +338,7 @@ func TestAntigravityExecute_CreditsInjectedWhenConductorRequests(t *testing.T) {
 		QuotaExceeded: config.QuotaExceeded{AntigravityCredits: true},
 	})
 	auth := &cliproxyauth.Auth{
-		ID: fmt.Sprintf("auth-credits-conductor-%d", time.Now().UnixNano()),
+		ID: "auth-credits-conductor",
 		Attributes: map[string]string{
 			"base_url": server.URL,
 		},
@@ -373,16 +361,6 @@ func TestAntigravityExecute_CreditsInjectedWhenConductorRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	stateValue, ok := antigravityCreditsHintRefreshByID.Load(auth.ID)
-	if !ok {
-		t.Fatal("expected credits refresh state")
-	}
-	state, ok := stateValue.(*antigravityCreditsHintRefreshState)
-	if !ok || state == nil {
-		t.Fatal("credits refresh state has unexpected type")
-	}
-	state.mu.Lock()
-	state.mu.Unlock()
 	if len(resp.Payload) == 0 {
 		t.Fatal("Execute() returned empty payload")
 	}
@@ -645,13 +623,12 @@ func TestEnsureAccessToken_WarmTokenLoadsCreditsHint(t *testing.T) {
 		QuotaExceeded: config.QuotaExceeded{AntigravityCredits: true},
 	})
 	auth := &cliproxyauth.Auth{
-		ID: fmt.Sprintf("auth-warm-token-credits-%d", time.Now().UnixNano()),
+		ID: "auth-warm-token-credits",
 		Metadata: map[string]any{
 			"access_token": "token",
 			"expired":      time.Now().Add(1 * time.Hour).Format(time.RFC3339),
 		},
 	}
-	refreshDone := make(chan struct{})
 	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		u := req.URL.String()
 		if u != "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" && u != "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist" {
@@ -660,10 +637,7 @@ func TestEnsureAccessToken_WarmTokenLoadsCreditsHint(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body: &closeSignalReadCloser{
-				ReadCloser: io.NopCloser(strings.NewReader(`{"paidTier":{"id":"tier-1","availableCredits":[{"creditType":"GOOGLE_ONE_AI","creditAmount":"25000","minimumCreditAmountForUsage":"50"}]}}`)),
-				closed:     refreshDone,
-			},
+			Body:       io.NopCloser(strings.NewReader(`{"paidTier":{"id":"tier-1","availableCredits":[{"creditType":"GOOGLE_ONE_AI","creditAmount":"25000","minimumCreditAmountForUsage":"50"}]}}`)),
 		}, nil
 	}))
 
@@ -677,10 +651,9 @@ func TestEnsureAccessToken_WarmTokenLoadsCreditsHint(t *testing.T) {
 	if updatedAuth != nil {
 		t.Fatalf("ensureAccessToken() updatedAuth = %v, want nil", updatedAuth)
 	}
-	select {
-	case <-refreshDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for background credits refresh")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !cliproxyauth.HasKnownAntigravityCreditsHint(auth.ID) {
+		time.Sleep(10 * time.Millisecond)
 	}
 	if !cliproxyauth.HasKnownAntigravityCreditsHint(auth.ID) {
 		t.Fatal("expected credits hint to be populated for warm token auth")

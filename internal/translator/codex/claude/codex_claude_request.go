@@ -272,31 +272,23 @@ func ConvertClaudeRequestToCodex(modelName string, inputRawJSON []byte, _ bool) 
 				continue
 			}
 			tool := []byte(toolResult.Raw)
-			if toolResult.Get("type").Type != gjson.String || toolResult.Get("type").String() != "function" {
-				tool, _ = sjson.SetBytes(tool, "type", "function")
-			}
+			tool, _ = sjson.SetBytes(tool, "type", "function")
 			// Apply shortened name if needed
 			if v := toolResult.Get("name"); v.Exists() {
-				originalName := v.String()
-				name := originalName
+				name := v.String()
 				if short, ok := toolNameMap[name]; ok {
 					name = short
 				} else {
 					name = shortenNameIfNeeded(name)
 				}
-				if v.Type != gjson.String || name != originalName {
-					tool, _ = sjson.SetBytes(tool, "name", name)
-				}
+				tool, _ = sjson.SetBytes(tool, "name", name)
 			}
 			tool, _ = sjson.SetRawBytes(tool, "parameters", []byte(normalizeToolParameters(toolResult.Get("input_schema").Raw)))
-			for _, path := range []string{"input_schema", "parameters.$schema", "cache_control", "defer_loading"} {
-				if gjson.GetBytes(tool, path).Exists() {
-					tool, _ = sjson.DeleteBytes(tool, path)
-				}
-			}
-			if gjson.GetBytes(tool, "strict").Type != gjson.False {
-				tool, _ = sjson.SetBytes(tool, "strict", false)
-			}
+			tool, _ = sjson.DeleteBytes(tool, "input_schema")
+			tool, _ = sjson.DeleteBytes(tool, "parameters.$schema")
+			tool, _ = sjson.DeleteBytes(tool, "cache_control")
+			tool, _ = sjson.DeleteBytes(tool, "defer_loading")
+			tool, _ = sjson.SetBytes(tool, "strict", false)
 			toolItems = append(toolItems, tool)
 		}
 	}

@@ -350,22 +350,13 @@ func ConvertOpenAIRequestToGemini(modelName string, inputRawJSON []byte, _ bool)
 						fnRaw = string(fnRawBytes)
 					}
 					fnRawBytes := []byte(fnRaw)
-					nameResult := fn.Get("name")
-					originalName := nameResult.String()
-					sanitizedName := util.SanitizeFunctionName(originalName)
-					if nameResult.Type != gjson.String || sanitizedName != originalName {
-						fnRawBytes, _ = sjson.SetBytes(fnRawBytes, "name", sanitizedName)
+					fnRawBytes, _ = sjson.SetBytes(fnRawBytes, "name", util.SanitizeFunctionName(fn.Get("name").String()))
+					fnRaw = string(fnRawBytes)
+					if parameters := gjson.Get(fnRaw, "parametersJsonSchema"); parameters.Exists() {
+						fnRaw, _ = sjson.SetRaw(fnRaw, "parametersJsonSchema", util.CleanJSONSchemaForGemini(parameters.Raw))
 					}
-					if parameters := gjson.GetBytes(fnRawBytes, "parametersJsonSchema"); parameters.Exists() {
-						cleanedParameters := util.CleanJSONSchemaForGemini(parameters.Raw)
-						if cleanedParameters != parameters.Raw {
-							fnRawBytes, _ = sjson.SetRawBytes(fnRawBytes, "parametersJsonSchema", []byte(cleanedParameters))
-						}
-					}
-					if gjson.GetBytes(fnRawBytes, "strict").Exists() {
-						fnRawBytes, _ = sjson.DeleteBytes(fnRawBytes, "strict")
-					}
-					functionDeclarations = append(functionDeclarations, fnRawBytes)
+					fnRaw, _ = sjson.Delete(fnRaw, "strict")
+					functionDeclarations = append(functionDeclarations, []byte(fnRaw))
 				}
 			}
 			if gs := t.Get("google_search"); gs.Exists() {

@@ -125,9 +125,9 @@ func (w *Watcher) reloadConfig() bool {
 	if oldConfig != nil {
 		details := diff.BuildConfigChangeDetails(oldConfig, newConfig)
 		if len(details) > 0 {
-			log.Info("config changes detected:")
+			log.Debugf("config changes detected:")
 			for _, d := range details {
-				log.Infof("  %s", d)
+				log.Debugf("  %s", d)
 			}
 		} else {
 			log.Debugf("no material config field changes detected")
