@@ -99,9 +99,17 @@ jobs:
             internal/runtime/executor/helps/payload_helpers_upstream.go; do
             [ -f "$f" ] && git rm "$f" 2>/dev/null || true
           done
-          # sdk/cliproxy/ is gitignored — delete files that reference
-          # config fields/types the fork doesn't have (upstream features).
-          for f in sdk/cliproxy/auth/conductor_home.go sdk/cliproxy/auth/conductor_execution.go; do
+          # sdk/cliproxy/ is gitignored — restore conductor.go from pre-merge
+          # (fork version doesn't reference HomeDispatchBundle etc.) and delete
+          # all new conductor_*.go files that reference upstream-only types.
+          git show HEAD^1:sdk/cliproxy/auth/conductor.go > sdk/cliproxy/auth/conductor.go 2>/dev/null || true
+          git add -f sdk/cliproxy/auth/conductor.go 2>/dev/null || true
+          for f in sdk/cliproxy/auth/conductor_*.go; do
+            if [ -f "$f" ] && [ "$(basename "$f")" != "conductor.go" ]; then
+              git rm -f "$f" 2>/dev/null || true
+            fi
+          done
+          for f in sdk/cliproxy/auth/conductor_cooldown.go sdk/cliproxy/auth/conductor_selection.go sdk/cliproxy/auth/conductor_home_execution.go; do
             [ -f "$f" ] && git rm -f "$f" 2>/dev/null || true
           done
           git add -A 2>/dev/null || true
