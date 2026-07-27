@@ -80,9 +80,12 @@ jobs:
         run: |
           # Restore config.go from pre-merge (preserves fork's kiro/copilot/z.ai fields)
           git checkout HEAD^1 -- internal/config/config.go 2>/dev/null || true
-          # Delete refactored config files that duplicate functions in our config.go
-          for f in config_load.go config_defaults.go config_normalization.go; do
-            [ -f "internal/config/$f" ] && git rm internal/config/$f 2>/dev/null || true
+          # Delete all refactored config_*.go files — their types/functions
+          # are already in our restored config.go (from pre-merge).
+          for f in internal/config/config_*.go; do
+            if [ -f "$f" ] && [ "$(basename "$f")" != "config.go" ]; then
+              git rm "$f" 2>/dev/null || true
+            fi
           done
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
           git add -A 2>/dev/null || true
