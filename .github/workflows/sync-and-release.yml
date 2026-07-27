@@ -89,10 +89,16 @@ jobs:
             internal/translator/openai/openai/chat-completions/openai_openai_request.go; do
             git checkout upstream/main -- "$f" 2>/dev/null || true
           done
+          # Checkout types.go from upstream (bypasses gitignore via git show)
+          git show upstream/main:sdk/cliproxy/executor/types.go > sdk/cliproxy/executor/types.go 2>/dev/null || true
+          git add -f sdk/cliproxy/executor/types.go 2>/dev/null || true
           # Delete config_*.go (redeclared) and codex_live.go (missing types)
           for f in internal/config/config_*.go internal/config/codex_live.go internal/config/codex_live_test.go; do
             [ -f "$f" ] && git rm "$f" 2>/dev/null || true
           done
+          # Delete files that reference upstream-specific config fields (safe, no deps)
+          [ -f internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go ] && git rm internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go 2>/dev/null || true
+          [ -f sdk/cliproxy/auth/conductor_home.go ] && git rm -f sdk/cliproxy/auth/conductor_home.go 2>/dev/null || true
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
           git add -A 2>/dev/null || true
           if ! git diff --cached --quiet; then
