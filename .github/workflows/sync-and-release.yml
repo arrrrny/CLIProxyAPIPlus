@@ -78,13 +78,14 @@ jobs:
 
       - name: Restore upstream files
         run: |
-          # Revert the entire working tree to pre-merge fork state.
-          # This preserves ALL fork customizations (kiro, copilot, z.ai, etc.)
-          # and removes new upstream files we don't need.
-          # We only keep the workflow file update.
+          # Revert all existing files to pre-merge fork state
           git checkout HEAD^1 -- . 2>/dev/null || true
-          # Remove new upstream files that don't exist in HEAD^1
-          git clean -fd 2>/dev/null || true
+          # Delete all NEW files added by the upstream merge (they don't exist
+          # in HEAD^1 and conflict with the fork's codebase).
+          for f in $(git diff --name-only --diff-filter=A HEAD^1 HEAD 2>/dev/null); do
+            echo "  -> Removing new upstream file: $f"
+            git rm -f "$f" 2>/dev/null || true
+          done
           # Restore the current workflow file
           git checkout HEAD -- .github/workflows/sync-and-release.yml 2>/dev/null || true
           git add .github/workflows/sync-and-release.yml 2>/dev/null || true
