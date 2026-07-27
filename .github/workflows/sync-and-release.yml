@@ -135,8 +135,13 @@ jobs:
             files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
             for f in $files; do
               echo "  -> Checking out $f from upstream"
-              git checkout upstream/main -- "$f" 2>/dev/null || true
-              git add "$f" 2>/dev/null || true
+              # git checkout doesn't update index for gitignored paths (sdk/cliproxy/)
+              if echo "$f" | grep -q "^sdk/cliproxy/"; then
+                git show upstream/main:"$f" > "$f" 2>/dev/null && git add -f "$f" 2>/dev/null || true
+              else
+                git checkout upstream/main -- "$f" 2>/dev/null || true
+                git add "$f" 2>/dev/null || true
+              fi
               fixed=1
             done
             if [ "$fixed" = "0" ]; then
