@@ -40,10 +40,6 @@ jobs:
 
       - name: Merge upstream/main into sync
         run: |
-          # Merge upstream/main into the current sync branch.
-          # -X theirs prefers upstream changes for text conflicts, ensuring the
-          # merged codebase stays self-consistent and compiles. Fork-specific
-          # changes in non-conflicting hunks are still preserved.
           git merge upstream/main -m "chore: sync with upstream/main" -X theirs 2>&1 || {
             echo "Merge had conflicts. Resolving modify/delete conflicts..."
             for file in $(git ls-files -u | awk '{print $4}' | sort -u); do
@@ -51,12 +47,10 @@ jobs:
                 echo "  -> $file: upstream deleted, keeping upstream version"
                 git add -- "$file"
               else
-                # --theirs failed, meaning we deleted this file — accept our deletion
                 echo "  -> $file: deleted by us, keeping deletion"
                 git rm -- "$file" 2>/dev/null || git rm --cached -- "$file"
               fi
             done
-            # Verify nothing left unmerged
             remaining=$(git ls-files -u | awk '{print $4}' | sort -u)
             if [ -n "$remaining" ]; then
               echo "ERROR: Still have unmerged files after resolution:"
@@ -64,12 +58,7 @@ jobs:
               exit 1
             fi
           }
-
-          # Restore fork-specific files that upstream deleted but our fork depends on.
-          # When upstream deletes a file we haven't modified, git silently accepts the
-          # deletion without any conflict. These files need to be restored from HEAD.
           if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
-            # Still in merge state (had conflicts, not yet committed)
             git diff HEAD --diff-filter=D --name-only | while IFS= read -r f || [ -n "$f" ]; do
               echo "  -> Restoring fork-specific file: $f"
               git checkout HEAD -- "$f"
@@ -77,8 +66,6 @@ jobs:
             done
             git commit -m "chore: sync with upstream/main"
           else
-            # Merge was clean and already auto-committed as a merge commit.
-            # HEAD^1 is the first parent (our sync branch before the merge).
             git diff HEAD^1..HEAD --diff-filter=D --name-only | while IFS= read -r f || [ -n "$f" ]; do
               echo "  -> Restoring fork-specific file: $f"
               git checkout HEAD^1 -- "$f"
@@ -98,17 +85,6 @@ jobs:
             git commit -m "ci: restore sync-and-release workflow"
           fi
 
-      - name: Resolve upstream files
-        run: |
-          # These files have diverged badly between fork and upstream from
-          # repeated auto-merges. Neither -X ours nor -X theirs produces a
-          # clean result. Take the authoritative upstream version.
-          git checkout upstream/main -- internal/home/client.go internal/runtime/executor/claude_executor.go
-          git add internal/home/client.go internal/runtime/executor/claude_executor.go
-          if ! git diff --cached --quiet; then
-            git commit -m "fix: restore upstream files after merge"
-          fi
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -126,47 +102,28 @@ jobs:
       - name: Verify build
         run: |
           echo "Verifying build compiles before creating release tag..."
-          for i in 1 2 3; do
-            if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
-              exit 0
-            fi
-            echo "$output"
-            fixed=0
-            # Handle 'already declared' — checkout the file from upstream
-            files=$(echo "$output" | grep "already declared" | cut -d: -f1 | sort -u) || true
-            for f in $files; do
-              echo "  -> Checking out $f from upstream (duplicate declarations)"
-              git checkout upstream/main -- "$f"
-              git add "$f"
-              fixed=1
-            done
-            # Handle 'undefined' — checkout all upstream files with the symbol
-            symbols=$(echo "$output" | grep "undefined:" | grep -o "undefined: [^ ]*" | sed 's/undefined: //' | sort -u) || true
-            for sym in $symbols; do
-              files=$(git grep -l "$sym" upstream/main -- '*.go') || true
-              for sf in $files; do
-                fpath="${sf#upstream/main:}"
-                echo "  -> Checking out $fpath from upstream (contains $sym)"
-                git checkout upstream/main -- "$fpath"
-                git add "$fpath"
-                fixed=1
-              done
-            done
-            if [ "$fixed" = "0" ]; then
-              echo "Unfixable build errors — failing."
-              exit 1
-            fi
-            if ! git diff --cached --quiet; then
-              git commit -m "fix: resolve build errors after merge"
-            fi
+          if output=$(go build -o /dev/null ./cmd/server/... 2>&1); then
+            exit 0
+          fi
+          echo "$output"
+          files=$(echo "$output" | grep -E "^[a-z].*\.go:" | grep -v "^internal/config/config\.go:" | cut -d: -f1 | sort -u) || true
+          if [ -z "$files" ]; then
+            echo "Unfixable build errors — failing."
+            exit 1
+          fi
+          for f in $files; do
+            echo "  -> Checking out $f from upstream"
+            git checkout upstream/main -- "$f" 2>/dev/null || true
+            git add "$f" 2>/dev/null || true
           done
-          # Final attempt — fail if still broken
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: resolve build errors after merge"
+          fi
           go build -o /dev/null ./cmd/server/...
 
       - name: Check for changes to push
         id: check
         run: |
-          # Always allow release/tag creation if we are running the workflow
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Push sync branch
