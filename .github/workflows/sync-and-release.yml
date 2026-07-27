@@ -111,8 +111,10 @@ jobs:
           # references to new upstream auth/config features the fork doesn't have).
           git checkout HEAD^1 -- internal/watcher/diff/ sdk/api/handlers/ 2>/dev/null || true
           # Delete new handler files that duplicate functions from handlers.go
-          for f in sdk/api/handlers/handlers_context.go sdk/api/handlers/handlers_stream.go sdk/api/handlers/handlers_execution.go sdk/api/handlers/handlers_errors.go; do
-            [ -f "$f" ] && git rm "$f" 2>/dev/null || true
+          for f in sdk/api/handlers/handlers_*.go; do
+            if [ -f "$f" ] && [ "$(basename "$f")" != "handlers.go" ]; then
+              git rm "$f" 2>/dev/null || true
+            fi
           done
           # Delete new upstream files that reference deleted auth types
           [ -f internal/store/postgres_cooldown_store.go ] && git rm internal/store/postgres_cooldown_store.go 2>/dev/null || true
