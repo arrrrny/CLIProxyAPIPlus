@@ -89,29 +89,11 @@ jobs:
             internal/translator/openai/openai/chat-completions/openai_openai_request.go; do
             git checkout upstream/main -- "$f" 2>/dev/null || true
           done
-          # Delete files that reference upstream-specific config fields/types
-          # that the fork doesn't have (these are upstream features we don't need).
-          for f in \
-            internal/config/config_*.go \
-            internal/config/codex_live.go \
-            internal/config/codex_live_test.go \
-            internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go \
-            internal/runtime/executor/helps/payload_helpers_upstream.go; do
+          # Delete config_*.go (redeclared) and codex_live.go (missing types)
+          for f in internal/config/config_*.go internal/config/codex_live.go internal/config/codex_live_test.go; do
             [ -f "$f" ] && git rm "$f" 2>/dev/null || true
           done
-          # sdk/cliproxy/ is gitignored — restore conductor.go from pre-merge
-          # (fork version doesn't reference HomeDispatchBundle etc.) and delete
-          # all new conductor_*.go files that reference upstream-only types.
-          git show HEAD^1:sdk/cliproxy/auth/conductor.go > sdk/cliproxy/auth/conductor.go 2>/dev/null || true
-          git add -f sdk/cliproxy/auth/conductor.go 2>/dev/null || true
-          for f in sdk/cliproxy/auth/conductor_*.go; do
-            if [ -f "$f" ] && [ "$(basename "$f")" != "conductor.go" ]; then
-              git rm -f "$f" 2>/dev/null || true
-            fi
-          done
-          for f in sdk/cliproxy/auth/conductor_cooldown.go sdk/cliproxy/auth/conductor_selection.go sdk/cliproxy/auth/conductor_home_execution.go; do
-            [ -f "$f" ] && git rm -f "$f" 2>/dev/null || true
-          done
+          [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
           git add -A 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "fix: restore fork config after merge"
