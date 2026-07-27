@@ -107,10 +107,11 @@ jobs:
           done
           [ -f internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go ] && git rm internal/client/codex/optimize-multi-agent-v2/optimize_multi_agent_v2.go 2>/dev/null || true
           [ -f internal/runtime/executor/helps/payload_helpers_upstream.go ] && git rm internal/runtime/executor/helps/payload_helpers_upstream.go 2>/dev/null || true
-          # Restore watcher/diff from pre-merge (avoids XAI, LiveMediaRelay etc.)
-          git checkout HEAD^1 -- internal/watcher/diff/ 2>/dev/null || true
-          # Delete new upstream handler file that references missing SafeResponseHeaders
-          [ -f sdk/api/handlers/handlers_errors.go ] && git rm sdk/api/handlers/handlers_errors.go 2>/dev/null || true
+          # Restore watcher/diff and sdk/api/handlers from pre-merge (avoids
+          # references to new upstream auth/config features the fork doesn't have).
+          git checkout HEAD^1 -- internal/watcher/diff/ sdk/api/handlers/ 2>/dev/null || true
+          # Delete new upstream files that reference deleted auth types
+          [ -f internal/store/postgres_cooldown_store.go ] && git rm internal/store/postgres_cooldown_store.go 2>/dev/null || true
           git add -A 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "fix: restore fork config after merge"
