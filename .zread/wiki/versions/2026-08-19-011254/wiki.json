@@ -1,0 +1,167 @@
+{
+  "id": "2026-08-19-011254",
+  "generated_at": "2026-08-18T22:12:54.147185Z",
+  "language": "en",
+  "pages": [
+    {
+      "slug": "1-overview",
+      "title": "Overview",
+      "file": "1-overview.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-quick-start",
+      "title": "Quick Start",
+      "file": "2-quick-start.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-configuration-reference",
+      "title": "Configuration Reference",
+      "file": "3-configuration-reference.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-docker-deployment",
+      "title": "Docker Deployment",
+      "file": "4-docker-deployment.md",
+      "section": "Get Started",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-application-entry-point-and-cli-flags",
+      "title": "Application Entry Point and CLI Flags",
+      "file": "5-application-entry-point-and-cli-flags.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "6-http-server-and-protocol-multiplexing",
+      "title": "HTTP Server and Protocol Multiplexing",
+      "file": "6-http-server-and-protocol-multiplexing.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-authentication-system-and-provider-login-flows",
+      "title": "Authentication System and Provider Login Flows",
+      "file": "7-authentication-system-and-provider-login-flows.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "8-translator-registry-and-format-conversion",
+      "title": "Translator Registry and Format Conversion",
+      "file": "8-translator-registry-and-format-conversion.md",
+      "section": "Deep Dive",
+      "group": "Request Translation Pipeline",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "9-provider-specific-translator-implementations",
+      "title": "Provider-Specific Translator Implementations",
+      "file": "9-provider-specific-translator-implementations.md",
+      "section": "Deep Dive",
+      "group": "Request Translation Pipeline",
+      "level": "Advanced"
+    },
+    {
+      "slug": "10-executor-architecture-and-provider-dispatch",
+      "title": "Executor Architecture and Provider Dispatch",
+      "file": "10-executor-architecture-and-provider-dispatch.md",
+      "section": "Deep Dive",
+      "group": "Runtime Executors",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-codex-and-websocket-executors",
+      "title": "Codex and WebSocket Executors",
+      "file": "11-codex-and-websocket-executors.md",
+      "section": "Deep Dive",
+      "group": "Runtime Executors",
+      "level": "Advanced"
+    },
+    {
+      "slug": "12-plugin-host-and-c-abi-integration",
+      "title": "Plugin Host and C ABI Integration",
+      "file": "12-plugin-host-and-c-abi-integration.md",
+      "section": "Deep Dive",
+      "group": "Plugin System",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-plugin-store-install-and-lifecycle",
+      "title": "Plugin Store, Install, and Lifecycle",
+      "file": "13-plugin-store-install-and-lifecycle.md",
+      "section": "Deep Dive",
+      "group": "Plugin System",
+      "level": "Advanced"
+    },
+    {
+      "slug": "14-dynamic-model-registry-and-discovery",
+      "title": "Dynamic Model Registry and Discovery",
+      "file": "14-dynamic-model-registry-and-discovery.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-configuration-hot-reload-and-file-watching",
+      "title": "Configuration Hot-Reload and File Watching",
+      "file": "15-configuration-hot-reload-and-file-watching.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-home-control-plane-integration",
+      "title": "Home Control Plane Integration",
+      "file": "16-home-control-plane-integration.md",
+      "section": "Deep Dive",
+      "level": "Advanced"
+    },
+    {
+      "slug": "17-management-api",
+      "title": "Management API",
+      "file": "17-management-api.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "18-signature-validation-and-provider-compatibility",
+      "title": "Signature Validation and Provider Compatibility",
+      "file": "18-signature-validation-and-provider-compatibility.md",
+      "section": "Deep Dive",
+      "level": "Advanced"
+    },
+    {
+      "slug": "19-thinking-and-reasoning-mode-handling",
+      "title": "Thinking and Reasoning Mode Handling",
+      "file": "19-thinking-and-reasoning-mode-handling.md",
+      "section": "Deep Dive",
+      "level": "Advanced"
+    },
+    {
+      "slug": "20-usage-tracking-and-redis-queue",
+      "title": "Usage Tracking and Redis Queue",
+      "file": "20-usage-tracking-and-redis-queue.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "21-sdk-architecture-for-embedding",
+      "title": "SDK Architecture for Embedding",
+      "file": "21-sdk-architecture-for-embedding.md",
+      "section": "Deep Dive",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "22-custom-provider-example-walkthrough",
+      "title": "Custom Provider Example Walkthrough",
+      "file": "22-custom-provider-example-walkthrough.md",
+      "section": "Deep Dive",
+      "level": "Advanced"
+    }
+  ]
+}
