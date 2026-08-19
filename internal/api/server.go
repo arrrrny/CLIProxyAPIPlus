@@ -530,6 +530,7 @@ func (s *Server) setupRoutes() {
 	v1.Use(AuthMiddleware(s.accessManager))
 	{
 		v1.GET("/models", s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers))
+		v1.GET("/models/all", s.allModelsHandler())
 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
 		v1.POST("/completions", openaiHandlers.Completions)
 		v1.POST("/images/generations", openaiHandlers.ImagesGenerations)
@@ -1249,6 +1250,30 @@ func (s *Server) unifiedModelsHandler(openaiHandler *openai.OpenAIAPIHandler, cl
 			openaiHandler.OpenAIModels(c)
 		}
 	}
+}
+
+// allModelsHandler returns all models from all providers in OpenAI format
+func (s *Server) allModelsHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s != nil && s.cfg != nil && s.cfg.Home.Enabled {
+			s.handleHomeModels(c)
+			return
+		}
+
+		// Get all available models from the registry
+		models := s.getAllAvailableModels()
+		
+		c.JSON(http.StatusOK, gin.H{
+			"object": "list",
+			"data":   models,
+		})
+	}
+}
+
+func (s *Server) getAllAvailableModels() []map[string]any {
+	// Get dynamic models from the global registry
+	modelRegistry := registry.GetGlobalRegistry()
+	return modelRegistry.GetAvailableModels("openai")
 }
 
 func (s *Server) geminiModelsHandler(geminiHandler *gemini.GeminiAPIHandler) gin.HandlerFunc {
