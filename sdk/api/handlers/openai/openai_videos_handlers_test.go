@@ -482,7 +482,7 @@ func TestWriteVideoContentFromURLUsesPinnedAuthProxy(t *testing.T) {
 func TestWriteVideoContentFromURLFallsBackToGlobalProxy(t *testing.T) {
 	resetVideoAuthBindingsForTest(t)
 
-	base := apihandlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080"}, nil)
+	base := apihandlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080", ProxyEnabledByDefault: true}, nil)
 	handler := NewOpenAIAPIHandler(base)
 
 	gin.SetMode(gin.TestMode)
