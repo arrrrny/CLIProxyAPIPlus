@@ -58,6 +58,11 @@ type SDKConfig struct {
 
 	// EnableGeminiCLIEndpoint controls whether Gemini CLI internal endpoints (/v1internal:*) are enabled.
 	EnableGeminiCLIEndpoint bool `yaml:"enable-gemini-cli-endpoint" json:"enable-gemini-cli-endpoint"`
+
+	// ProxyEnabledByDefault controls whether the global proxy is enabled by default for all providers.
+	// When false (default), providers must explicitly configure a proxy URL to use proxy.
+	// When true, the global proxy URL is used as fallback for providers without explicit proxy configuration.
+	ProxyEnabledByDefault bool `yaml:"proxy-enabled-by-default" json:"proxy-enabled-by-default"`
 }
 
 // StreamingConfig holds server streaming behavior configuration.

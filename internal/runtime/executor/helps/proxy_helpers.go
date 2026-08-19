@@ -21,7 +21,7 @@ var (
 
 // NewProxyAwareHTTPClient creates an HTTP client with proper proxy configuration priority:
 // 1. Use auth.ProxyURL if configured (highest priority)
-// 2. Use cfg.ProxyURL if auth proxy is not configured
+// 2. Use cfg.ProxyURL if auth proxy is not configured AND proxy is enabled by default
 // 3. Use RoundTripper from context if neither are configured
 //
 // This function caches HTTP clients by proxy URL to enable TCP/TLS connection reuse.
@@ -41,9 +41,14 @@ func NewProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 		proxyURL = strings.TrimSpace(auth.ProxyURL)
 	}
 
-	// Priority 2: Use cfg.ProxyURL if auth proxy is not configured
+	// Priority 2: Use cfg.ProxyURL if auth proxy is not configured AND proxy is enabled by default
 	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+		// If proxy is not enabled by default, treat empty auth proxy as "direct" (no proxy)
+		if !cfg.SDKConfig.ProxyEnabledByDefault {
+			proxyURL = "direct"
+		} else {
+			proxyURL = strings.TrimSpace(cfg.ProxyURL)
+		}
 	}
 
 	// If we have a proxy URL configured, try cache first to reuse TCP/TLS connections.

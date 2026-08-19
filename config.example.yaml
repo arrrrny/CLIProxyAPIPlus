@@ -118,6 +118,11 @@ redis-usage-queue-retention-seconds: 60
 # Per-entry proxy-url also supports "direct" or "none" to bypass both the global proxy-url and environment proxies explicitly.
 proxy-url: ""
 
+# When true, the global proxy-url is used by default for all providers that don't have an explicit proxy-url configured.
+# When false (default), providers must explicitly configure a proxy-url (per-entry) to route traffic through a proxy.
+# Set to true to enable the legacy behavior where global proxy applies to all providers by default.
+proxy-enabled-by-default: false
+
 # When true, unprefixed model requests only use credentials without a prefix (except when prefix == model name).
 force-model-prefix: false
 
