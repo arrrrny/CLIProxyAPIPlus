@@ -360,7 +360,10 @@ func validateModelSection(section string, models []*ModelInfo) error {
 			return fmt.Errorf("%s[%d] has empty id", section, i)
 		}
 		if _, exists := seen[modelID]; exists {
-			return fmt.Errorf("%s contains duplicate model id %q", section, modelID)
+			// Tolerated rather than fatal: a duplicate model id should not
+			// prevent the entire catalog (and thus the proxy) from loading.
+			log.Warnf("models catalog: %s contains duplicate model id %q, keeping first occurrence", section, modelID)
+			continue
 		}
 		seen[modelID] = struct{}{}
 	}

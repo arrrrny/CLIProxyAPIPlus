@@ -528,6 +528,9 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 	}
 
 	data := getModels()
+	if data == nil {
+		return nil
+	}
 	allModels := [][]*ModelInfo{
 		data.Claude,
 		data.Gemini,

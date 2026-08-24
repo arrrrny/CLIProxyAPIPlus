@@ -2458,8 +2458,8 @@ func applyModelPrefixes(models []*ModelInfo, prefix string, forceModelPrefix boo
 		return models
 	}
 
-	out := make([]*ModelInfo, 0, len(models)*2)
-	seen := make(map[string]struct{}, len(models)*2)
+	out := make([]*ModelInfo, 0, len(models))
+	seen := make(map[string]struct{}, len(models))
 
 	addModel := func(model *ModelInfo) {
 		if model == nil {
@@ -2484,12 +2484,16 @@ func applyModelPrefixes(models []*ModelInfo, prefix string, forceModelPrefix boo
 		if baseID == "" {
 			continue
 		}
-		if !forceModelPrefix || trimmedPrefix == baseID {
+		if forceModelPrefix {
+			// When forceModelPrefix is true, ONLY register the prefixed version
+			clone := *model
+			clone.ID = trimmedPrefix + "/" + baseID
+			addModel(&clone)
+		} else {
+			// When forceModelPrefix is false, ONLY register the non-prefixed version
+			// (prefix is still used for routing when explicitly specified)
 			addModel(model)
 		}
-		clone := *model
-		clone.ID = trimmedPrefix + "/" + baseID
-		addModel(&clone)
 	}
 	return out
 }
