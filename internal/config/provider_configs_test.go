@@ -64,8 +64,8 @@ func TestDedicatedProviderConfigs_OpenCodeInfersEndpoint(t *testing.T) {
 		t.Fatalf("opencode = %+v, want path /zen/v1/models + style opencode", oc)
 	}
 	ocg := byName["opencode-go"]
-	if ocg.ModelsPath != "/zen/v1/models" || ocg.ParseStyle != registry.ParseStyleOpenCode {
-		t.Fatalf("opencode-go = %+v, want path /zen/v1/models + style opencode", ocg)
+	if ocg.ModelsPath != "/zen/go/v1/models" || ocg.ParseStyle != registry.ParseStyleOpenCode {
+		t.Fatalf("opencode-go = %+v, want path /zen/go/v1/models + style opencode", ocg)
 	}
 	zai := byName["z-ai"]
 	if zai.ModelsPath != "/models" || zai.ParseStyle != registry.ParseStyleTopLevel {

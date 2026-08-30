@@ -206,7 +206,10 @@ func (r *ModelRegistry) MergeProviderContextWindows(provider string, items []Pro
 		if mct > 0 {
 			info.MaxCompletionTokens = mct
 		}
-		if pi := providerInfo(reg, provider); pi != nil {
+		// providerInfo may alias the same *ModelInfo as info (e.g. when the
+		// model was just ensured), so only write the per-provider override when
+		// it is a distinct pointer.
+		if pi := providerInfo(reg, provider); pi != nil && pi != info {
 			if ctxLen > 0 {
 				pi.ContextLength = ctxLen
 			}
