@@ -544,6 +544,13 @@ func (s *Server) setupRoutes() {
 		v1.POST("/alpha/search", s.codexAlphaSearch)
 	}
 
+	// Root /api.json is the authoritative models.dev catalog endpoint: the spec
+	// requires the proxy to serve /api.json on its own port (e.g. 8317), and
+	// downstream consumers (Quotio's ProxyBridge) read it from root. It reuses the
+	// exact same handler as /v1/api.json so config.propagate_in_api governs provider
+	// visibility identically at both paths. Provider visibility never changes routing.
+	s.engine.GET("/api.json", openaiHandlers.APIJSON)
+
 	openaiV1 := s.engine.Group("/openai/v1")
 	openaiV1.Use(AuthMiddleware(s.accessManager))
 	{
