@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -12,20 +13,38 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// ProviderParseStyle selects how a dedicated provider's /models response is parsed
+// for context windows (FR-003).
+type ProviderParseStyle string
+
+const (
+	// ParseStyleTopLevel parses models that expose a top-level context_length /
+	// max_completion_tokens (openrouter, z.ai).
+	ParseStyleTopLevel ProviderParseStyle = "top-level"
+	// ParseStyleOpenCode parses models that return ids only (opencode /
+	// opencode-go); context windows are sourced from the curated table (FR-008).
+	ParseStyleOpenCode ProviderParseStyle = "opencode"
+)
+
 // ProviderConfig describes a dedicated OpenAI-compatible provider whose live
-// /v1/models endpoint is the source of truth for context windows (FR-002, FR-004).
+// models endpoint is the source of truth for context windows (FR-002, FR-004).
 type ProviderConfig struct {
 	// Name is the provider identifier (e.g. "openrouter") used to tag the
 	// per-provider ModelInfo override.
 	Name string
-	// BaseURL is the OpenAI-compatible base URL. A trailing "/v1" is tolerated and
-	// stripped before appending "/v1/models" (FR-002, U12).
+	// BaseURL is the OpenAI-compatible base URL. The provider-specific models path
+	// (ModelsPath) is appended to it (FR-002).
 	BaseURL string
 	// APIKey is sent as a Bearer token in the Authorization header.
 	APIKey string
+	// ModelsPath is the provider-specific models-endpoint path appended to BaseURL
+	// (FR-002). Empty falls back to the legacy "/v1/models" normalization.
+	ModelsPath string
+	// ParseStyle selects the response parser (FR-003). Empty defaults to top-level.
+	ParseStyle ProviderParseStyle
 }
 
-// ProviderModelLimit is one model's reported window from a provider /v1/models.
+// ProviderModelLimit is one model's reported window from a provider /models.
 type ProviderModelLimit struct {
 	ID                  string `json:"id"`
 	ContextLength       int    `json:"context_length"`
@@ -50,14 +69,12 @@ func NewProviderModelsFetcher(reg *ModelRegistry) *ProviderModelsFetcher {
 	}
 }
 
-// FetchAndMerge GETs <baseURL>/v1/models with Authorization: Bearer <APIKey> and
-// merges the reported windows into the registry keyed by the exact model id. A
-// non-200 status or transport error is returned without wiping any value; the
-// caller decides retry policy (FR-007, FR-008).
+// FetchAndMerge GETs the provider's models endpoint (BaseURL + ModelsPath) with
+// Authorization: Bearer <APIKey> and merges the reported windows into the registry
+// keyed by the exact model id. A non-200 status or transport error is returned
+// without wiping any value; the caller decides retry policy (FR-007, FR-008).
 func (f *ProviderModelsFetcher) FetchAndMerge(ctx context.Context, prov ProviderConfig) error {
-	base := strings.TrimRight(prov.BaseURL, "/")
-	base = strings.TrimSuffix(base, "/v1")
-	url := base + "/v1/models"
+	url := resolveModelsURL(prov.BaseURL, prov.ModelsPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -76,46 +93,157 @@ func (f *ProviderModelsFetcher) FetchAndMerge(ctx context.Context, prov Provider
 		return fmt.Errorf("fetch provider models for %s: unexpected status %d", prov.Name, resp.StatusCode)
 	}
 
-	var payload struct {
-		Data []ProviderModelLimit `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return fmt.Errorf("decode provider models for %s: %w", prov.Name, err)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read provider models for %s: %w", prov.Name, err)
 	}
 
-	f.registry.MergeProviderContextLengths(prov.Name, payload.Data)
+	items, err := parseProviderModels(prov.ParseStyle, body)
+	if err != nil {
+		return fmt.Errorf("parse provider models for %s: %w", prov.Name, err)
+	}
+
+	f.registry.MergeProviderContextWindows(prov.Name, items, curatedWindowsFor(prov.Name))
 	return nil
 }
 
-// MergeProviderContextLengths applies fetched windows into the registry, keyed by
-// the exact model id. A positive fetched value overrides the stored one; a zero
-// or missing value is ignored so known windows are never zeroed or guessed
-// (FR-003, FR-008). The per-provider ModelInfo override (InfoByProvider) is kept
-// in sync when present, and the available-models cache is invalidated.
-func (r *ModelRegistry) MergeProviderContextLengths(provider string, items []ProviderModelLimit) {
+// resolveModelsURL builds the full models URL. When modelsPath is empty it falls
+// back to the legacy behavior: strip a trailing "/v1" from base then append
+// "/v1/models" (U12). Otherwise modelsPath is appended to the trimmed base URL
+// exactly as configured, so each provider reaches its real endpoint (FR-002).
+func resolveModelsURL(baseURL, modelsPath string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if modelsPath == "" {
+		base = strings.TrimSuffix(base, "/v1")
+		return base + "/v1/models"
+	}
+	if !strings.HasPrefix(modelsPath, "/") {
+		modelsPath = "/" + modelsPath
+	}
+	return base + modelsPath
+}
+
+// parseProviderModels dispatches to the response parser for the provider's shape
+// (FR-003).
+func parseProviderModels(style ProviderParseStyle, body []byte) ([]ProviderModelLimit, error) {
+	if style == ParseStyleOpenCode {
+		return parseOpenCodeModels(body)
+	}
+	return parseTopLevelModels(body)
+}
+
+// parseTopLevelModels decodes an OpenAI-style list whose data items carry a
+// top-level context_length / max_completion_tokens (openrouter, z.ai).
+func parseTopLevelModels(body []byte) ([]ProviderModelLimit, error) {
+	var payload struct {
+		Data []ProviderModelLimit `json:"data"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("decode top-level models: %w", err)
+	}
+	return payload.Data, nil
+}
+
+// parseOpenCodeModels decodes an OpenCode-style list whose data items carry an id
+// only; context windows are filled later from the curated table (FR-008).
+func parseOpenCodeModels(body []byte) ([]ProviderModelLimit, error) {
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("decode opencode models: %w", err)
+	}
+	out := make([]ProviderModelLimit, 0, len(payload.Data))
+	for _, m := range payload.Data {
+		if id := strings.TrimSpace(m.ID); id != "" {
+			out = append(out, ProviderModelLimit{ID: id})
+		}
+	}
+	return out, nil
+}
+
+// MergeProviderContextWindows applies fetched windows into the registry, keyed by
+// the exact model id. A model id absent from the registry is registered under the
+// provider so the unified catalog (US2, FR-009) can surface it. A positive fetched
+// value overrides the stored one; when the endpoint omits a window, the curated
+// table (FR-008) supplies it; a zero / missing value is otherwise ignored so known
+// windows are never zeroed or guessed (FR-003, FR-006, FR-008). The per-provider
+// ModelInfo override (InfoByProvider) is kept in sync, and the cache is invalidated.
+func (r *ModelRegistry) MergeProviderContextWindows(provider string, items []ProviderModelLimit, curated map[string]ProviderModelLimit) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+	now := time.Now()
 
 	for _, item := range items {
-		reg, ok := r.models[item.ID]
-		if !ok || reg == nil || reg.Info == nil {
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
 			continue
 		}
-		if item.ContextLength > 0 {
-			reg.Info.ContextLength = item.ContextLength
-			if pi := providerInfo(reg, provider); pi != nil {
-				pi.ContextLength = item.ContextLength
+		reg, ok := r.models[id]
+		if !ok || reg == nil || reg.Info == nil {
+			reg = r.ensureProviderModelLocked(provider, id, now)
+		}
+		info := reg.Info
+
+		ctxLen := item.ContextLength
+		if ctxLen <= 0 {
+			if c, ok := curated[id]; ok {
+				ctxLen = c.ContextLength
 			}
 		}
-		if item.MaxCompletionTokens > 0 {
-			reg.Info.MaxCompletionTokens = item.MaxCompletionTokens
-			if pi := providerInfo(reg, provider); pi != nil {
-				pi.MaxCompletionTokens = item.MaxCompletionTokens
+		mct := item.MaxCompletionTokens
+		if mct <= 0 {
+			if c, ok := curated[id]; ok {
+				mct = c.MaxCompletionTokens
+			}
+		}
+
+		if ctxLen > 0 {
+			info.ContextLength = ctxLen
+		}
+		if mct > 0 {
+			info.MaxCompletionTokens = mct
+		}
+		if pi := providerInfo(reg, provider); pi != nil {
+			if ctxLen > 0 {
+				pi.ContextLength = ctxLen
+			}
+			if mct > 0 {
+				pi.MaxCompletionTokens = mct
 			}
 		}
 	}
 
 	r.invalidateAvailableModelsCacheLocked()
+}
+
+// ensureProviderModelLocked registers a model under the given provider if it is
+// not already present. Caller must hold r.mutex. It mirrors the fields set by the
+// internal model registration so the model is immediately available in the catalog.
+func (r *ModelRegistry) ensureProviderModelLocked(provider, id string, now time.Time) *ModelRegistration {
+	if reg, ok := r.models[id]; ok && reg != nil && reg.Info != nil {
+		return reg
+	}
+	info := &ModelInfo{
+		ID:      id,
+		Object:  "model",
+		OwnedBy: provider,
+		Type:    provider,
+		Created: now.Unix(),
+	}
+	reg := &ModelRegistration{
+		Info:                 info,
+		InfoByProvider:       map[string]*ModelInfo{provider: info},
+		Count:                1,
+		LastUpdated:          now,
+		QuotaExceededClients: map[string]*time.Time{},
+		SuspendedClients:     map[string]string{},
+		Providers:            map[string]int{provider: 1},
+	}
+	r.models[id] = reg
+	return reg
 }
 
 // providerInfo returns the per-provider ModelInfo override for a registration.

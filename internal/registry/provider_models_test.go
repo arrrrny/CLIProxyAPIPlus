@@ -219,3 +219,138 @@ func TestProviderFetcher_NormalizesBaseURL(t *testing.T) {
 		}
 	}
 }
+
+// opencodeBody builds an OpenCode-style /zen/v1/models payload (ids only).
+func opencodeBody(ids ...string) string {
+	type item struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		OwnedBy string `json:"owned_by"`
+	}
+	data := make([]item, 0, len(ids))
+	for _, id := range ids {
+		data = append(data, item{ID: id, Object: "model", OwnedBy: "opencode"})
+	}
+	b, _ := json.Marshal(struct {
+		Object string `json:"object"`
+		Data   []item `json:"data"`
+	}{Object: "list", Data: data})
+	return string(b)
+}
+
+// U20 (FR-002, FR-009): opencode hits its real /zen/v1/models path, registers
+// each returned id under the opencode namespace, and applies the curated window
+// (the endpoint carries no context_length).
+func TestProviderFetcher_OpenCodeRegistersAndUsesCuratedTable(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(opencodeBody("claude-opus-5", "gemini-3.6-flash")))
+	}))
+	defer srv.Close()
+
+	reg := GetGlobalRegistry()
+	f := NewProviderModelsFetcher(reg)
+	prov := ProviderConfig{
+		Name:       "opencode",
+		BaseURL:    srv.URL,
+		APIKey:     "k",
+		ModelsPath: "/zen/v1/models",
+		ParseStyle: ParseStyleOpenCode,
+	}
+	if err := f.FetchAndMerge(context.Background(), prov); err != nil {
+		t.Fatalf("FetchAndMerge error = %v, want nil", err)
+	}
+	if gotPath != "/zen/v1/models" {
+		t.Fatalf("request path = %q, want /zen/v1/models", gotPath)
+	}
+
+	info := reg.GetModelInfo("claude-opus-5", "opencode")
+	if info == nil {
+		t.Fatal("GetModelInfo(claude-opus-5, opencode) = nil after fetch")
+	}
+	if info.OwnedBy != "opencode" {
+		t.Errorf("OwnedBy = %q, want opencode", info.OwnedBy)
+	}
+	if info.ContextLength != 200000 {
+		t.Errorf("ContextLength (curated) = %d, want 200000", info.ContextLength)
+	}
+	if info.MaxCompletionTokens != 64000 {
+		t.Errorf("MaxCompletionTokens (curated) = %d, want 64000", info.MaxCompletionTokens)
+	}
+
+	info2 := reg.GetModelInfo("gemini-3.6-flash", "opencode")
+	if info2 == nil || info2.ContextLength != 1048576 {
+		t.Fatalf("gemini-3.6-flash curated ContextLength = %v, want 1048576", info2)
+	}
+}
+
+// U21 (FR-002, FR-003): z.ai hits its real /api/v1/models (top-level shape) and
+// applies the live context_length to a model not pre-registered (auto-registered).
+func TestProviderFetcher_ZAiTopLevelRegistersNewModel(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(providerBody(providerItem{ID: "z-ai/glm-4.6", ContextLength: 128000, MaxCompletionTokens: 8000})))
+	}))
+	defer srv.Close()
+
+	reg := GetGlobalRegistry()
+	f := NewProviderModelsFetcher(reg)
+	prov := ProviderConfig{
+		Name:       "z-ai",
+		BaseURL:    srv.URL,
+		APIKey:     "k",
+		ModelsPath: "/api/v1/models",
+		ParseStyle: ParseStyleTopLevel,
+	}
+	if err := f.FetchAndMerge(context.Background(), prov); err != nil {
+		t.Fatalf("FetchAndMerge error = %v, want nil", err)
+	}
+	if gotPath != "/api/v1/models" {
+		t.Fatalf("request path = %q, want /api/v1/models", gotPath)
+	}
+
+	info := reg.GetModelInfo("z-ai/glm-4.6", "z-ai")
+	if info == nil {
+		t.Fatal("GetModelInfo(z-ai/glm-4.6, z-ai) = nil after fetch (auto-register)")
+	}
+	if info.ContextLength != 128000 {
+		t.Errorf("ContextLength = %d, want 128000", info.ContextLength)
+	}
+	if info.MaxCompletionTokens != 8000 {
+		t.Errorf("MaxCompletionTokens = %d, want 8000", info.MaxCompletionTokens)
+	}
+}
+
+// U22 (FR-008, FR-006): a curated model with no live window gets the curated
+// value; a model absent from both the endpoint and the curated table gets no
+// window (never fabricated).
+func TestProviderFetcher_OpenCodeCuratedFallbackAndOmission(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(opencodeBody("claude-opus-5", "unknown-model")))
+	}))
+	defer srv.Close()
+
+	reg := GetGlobalRegistry()
+	f := NewProviderModelsFetcher(reg)
+	prov := ProviderConfig{Name: "opencode", BaseURL: srv.URL, APIKey: "k", ModelsPath: "/zen/v1/models", ParseStyle: ParseStyleOpenCode}
+	if err := f.FetchAndMerge(context.Background(), prov); err != nil {
+		t.Fatalf("FetchAndMerge error = %v, want nil", err)
+	}
+
+	curated := reg.GetModelInfo("claude-opus-5", "opencode")
+	if curated == nil || curated.ContextLength != 200000 {
+		t.Fatalf("claude-opus-5 ContextLength = %v, want 200000 (curated)", curated)
+	}
+	unknown := reg.GetModelInfo("unknown-model", "opencode")
+	if unknown == nil {
+		t.Fatal("unknown-model not registered")
+	}
+	if unknown.ContextLength != 0 {
+		t.Errorf("unknown-model ContextLength = %d, want 0 (omitted, not fabricated)", unknown.ContextLength)
+	}
+}

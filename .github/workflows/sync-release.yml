@@ -1,0 +1,94 @@
+name: sync-release
+
+# Replaces the disabled sync-and-release.yml. Builds release binaries for
+# linux/amd64 and darwin/amd64 (Intel Mac) on every push to the `sync` branch
+# and publishes them as a GitHub release.
+
+on:
+  push:
+    branches:
+      - sync
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.26.4"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-amd64
+            runner: macos-15
+            goos: darwin
+            goarch: amd64
+            asset_arch: amd64
+          - target: linux-amd64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_arch: amd64
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refresh models catalog
+        run: |
+          git fetch --depth 1 https://github.com/router-for-me/models.git main
+          git show FETCH_HEAD:models.json > internal/registry/models/models.json
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ASSET_ARCH: ${{ matrix.asset_arch }}
+        run: |
+          set -euo pipefail
+          RELEASE_VERSION="sync-$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p dist/archive
+          CGO_ENABLED=1 GOOS="$GOOS" GOARCH="$GOARCH" go build \
+            -ldflags="-s -w -X main.Version=${RELEASE_VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
+            -o dist/archive/cli-proxy-api ./cmd/server/
+          cp LICENSE README.md config.example.yaml dist/archive/
+          archive_name="CLIProxyAPI_${RELEASE_VERSION}_${GOOS}_${ASSET_ARCH}.tar.gz"
+          tar -C dist/archive -czf "dist/$archive_name" cli-proxy-api LICENSE README.md config.example.yaml
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/CLIProxyAPI_*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="sync-$(date -u +%Y%m%d)-$(git rev-parse --short HEAD)"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --title "Sync build $TAG" \
+            --notes "Automated build from the \`sync\` branch (linux/amd64 + darwin/amd64)."
+          gh release upload "$TAG" dist/CLIProxyAPI_*.tar.gz --clobber
