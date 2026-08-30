@@ -376,3 +376,102 @@ func TestResolveModelsURL(t *testing.T) {
 		}
 	}
 }
+
+// U24 (FR-009): when a configured alias is registered alongside a live endpoint that
+// returns the upstream id, the alias keeps its curated window (the live list has no
+// context_length and must not wipe the configured model).
+func TestProviderFetcher_ConfiguredAliasKeepsWindowWithLiveList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(opencodeBody("claude-opus-5", "gemini-3.6-flash")))
+	}))
+	defer srv.Close()
+
+	reg := GetGlobalRegistry()
+	f := NewProviderModelsFetcher(reg)
+	prov := ProviderConfig{
+		Name:       "opencode",
+		BaseURL:    srv.URL,
+		APIKey:     "k",
+		ModelsPath: "/zen/v1/models",
+		ParseStyle: ParseStyleOpenCode,
+		ConfiguredModels: []ConfiguredModel{
+			{ClientID: "opencode-claude-opus-5", UpstreamName: "claude-opus-5"},
+		},
+	}
+	if err := f.FetchAndMerge(context.Background(), prov); err != nil {
+		t.Fatalf("FetchAndMerge error = %v, want nil", err)
+	}
+
+	alias := reg.GetModelInfo("opencode-claude-opus-5", "opencode")
+	if alias == nil {
+		t.Fatal("GetModelInfo(opencode-claude-opus-5, opencode) = nil")
+	}
+	if alias.ContextLength != 200000 {
+		t.Errorf("alias ContextLength = %d, want 200000 (curated preserved)", alias.ContextLength)
+	}
+	up := reg.GetModelInfo("claude-opus-5", "opencode")
+	if up == nil || up.ContextLength != 200000 {
+		t.Fatalf("upstream claude-opus-5 ContextLength = %v, want 200000", up)
+	}
+}
+
+// U23 (FR-009): models the user explicitly selects via the openai-compatibility
+// `models:` list are registered into the catalog under their client-visible id
+// (alias when set) with curated windows keyed by upstream name — even when the live
+// endpoint returns no models. This guarantees the user's selections always surface
+// in /v1/models and /api.json, independent of an API key or endpoint reachability.
+func TestProviderFetcher_RegistersConfiguredModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(opencodeBody())) // empty live list
+	}))
+	defer srv.Close()
+
+	reg := GetGlobalRegistry()
+	f := NewProviderModelsFetcher(reg)
+	prov := ProviderConfig{
+		Name:       "opencode",
+		BaseURL:    srv.URL,
+		APIKey:     "k",
+		ModelsPath: "/zen/v1/models",
+		ParseStyle: ParseStyleOpenCode,
+		ConfiguredModels: []ConfiguredModel{
+			{ClientID: "opencode-claude-opus-5", UpstreamName: "claude-opus-5"},
+			{ClientID: "opencode-gemini-3.6-flash", UpstreamName: "gemini-3.6-flash"},
+		},
+	}
+	if err := f.FetchAndMerge(context.Background(), prov); err != nil {
+		t.Fatalf("FetchAndMerge error = %v, want nil", err)
+	}
+
+	info := reg.GetModelInfo("opencode-claude-opus-5", "opencode")
+	if info == nil {
+		t.Fatal("GetModelInfo(opencode-claude-opus-5, opencode) = nil after fetch")
+	}
+	if info.OwnedBy != "opencode" {
+		t.Errorf("OwnedBy = %q, want opencode", info.OwnedBy)
+	}
+	if info.ContextLength != 200000 {
+		t.Errorf("ContextLength (curated) = %d, want 200000", info.ContextLength)
+	}
+	if info.MaxCompletionTokens != 64000 {
+		t.Errorf("MaxCompletionTokens (curated) = %d, want 64000", info.MaxCompletionTokens)
+	}
+
+	gem := reg.GetModelInfo("opencode-gemini-3.6-flash", "opencode")
+	if gem == nil || gem.ContextLength != 1048576 {
+		t.Fatalf("opencode-gemini-3.6-flash ContextLength = %v, want 1048576", gem)
+	}
+
+	// Surfaces in the unified /openai catalog used by /v1/models and /api.json.
+	found := false
+	for _, m := range reg.GetAvailableModels("openai") {
+		if m["id"] == "opencode-claude-opus-5" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("opencode-claude-opus-5 not present in GetAvailableModels(\"openai\")")
+	}
+}
