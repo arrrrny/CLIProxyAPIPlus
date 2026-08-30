@@ -795,12 +795,20 @@ func (m OpenAICompatibilityModel) GetForceMapping() bool  { return m.ForceMappin
 func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
 	out := make([]registry.ProviderConfig, 0, len(cfg.OpenAICompatibility))
 	for _, c := range cfg.OpenAICompatibility {
-		if c.Disabled || c.Name == "" || c.BaseURL == "" {
+		if c.Disabled || c.Name == "" {
+			continue
+		}
+		baseURL := c.BaseURL
+		if baseURL == "" {
+			baseURL = defaultProviderBaseURL(c.Name)
+		}
+		if baseURL == "" {
+			// No base URL and no known default: cannot reach a models endpoint.
 			continue
 		}
 		pc := registry.ProviderConfig{
 			Name:       c.Name,
-			BaseURL:    c.BaseURL,
+			BaseURL:    baseURL,
 			ModelsPath: defaultProviderModelsPath(c.Name),
 			ParseStyle: defaultProviderParseStyle(c.Name),
 		}
@@ -813,9 +821,41 @@ func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
 		if len(c.APIKeyEntries) > 0 {
 			pc.APIKey = c.APIKeyEntries[0].APIKey
 		}
+		for _, m := range c.Models {
+			clientID := m.Alias
+			if clientID == "" {
+				clientID = m.Name
+			}
+			if clientID == "" {
+				continue
+			}
+			pc.ConfiguredModels = append(pc.ConfiguredModels, registry.ConfiguredModel{
+				ClientID:     clientID,
+				UpstreamName: m.Name,
+			})
+		}
 		out = append(out, pc)
 	}
 	return out
+}
+
+// defaultProviderBaseURL returns the well-known base URL for a dedicated provider
+// name when the user omitted base-url in their openai-compatibility block (FR-002).
+// Returns "" for unknown provider names so blocks without an explicit base URL are
+// skipped rather than pointed at a guessed endpoint.
+func defaultProviderBaseURL(name string) string {
+	switch strings.ToLower(name) {
+	case constant.OpenCode:
+		return "https://opencode.ai"
+	case constant.OpenCodeGo:
+		return "https://opencode.ai"
+	case constant.OpenRouter:
+		return "https://openrouter.ai/api/v1"
+	case constant.ZAi:
+		return "https://api.z.ai/v1"
+	default:
+		return ""
+	}
 }
 
 // defaultProviderModelsPath returns the provider-specific /models endpoint path
@@ -1205,8 +1245,16 @@ func (cfg *Config) SanitizeOpenAICompatibility() {
 		e.BaseURL = strings.TrimSpace(e.BaseURL)
 		e.Headers = NormalizeHeaders(e.Headers)
 		if e.BaseURL == "" {
-			// Skip providers with no base-url; treated as removed
-			continue
+			// Providers with a well-known base URL (opencode, opencode-go,
+			// openrouter, z-ai) are usable without an explicit base-url: the
+			// dedicated-provider refresh and routing fall back to the default
+			// endpoint (FR-002). Only blocks with neither an explicit base-url
+			// nor a known default are unroutable and therefore dropped.
+			if def := defaultProviderBaseURL(e.Name); def != "" {
+				e.BaseURL = def
+			} else {
+				continue
+			}
 		}
 		out = append(out, e)
 	}

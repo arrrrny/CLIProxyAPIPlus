@@ -35,8 +35,45 @@ func TestDedicatedProviderConfigs_MapsEnabledProviders(t *testing.T) {
 		ModelsPath: "/models",
 		ParseStyle: registry.ParseStyleTopLevel,
 	}
-	if got[0] != want {
+	if got[0].Name != want.Name || got[0].BaseURL != want.BaseURL || got[0].APIKey != want.APIKey ||
+		got[0].ModelsPath != want.ModelsPath || got[0].ParseStyle != want.ParseStyle {
 		t.Fatalf("DedicatedProviderConfigs[0] = %+v, want %+v", got[0], want)
+	}
+}
+
+// U13 / A6: an openai-compatibility block for a provider with a well-known base
+// URL (e.g. opencode) is usable without an explicit base-url. Sanitize keeps it and
+// assigns the default endpoint, while a block with neither an explicit nor a known
+// base URL is dropped (FR-002).
+func TestSanitizeOpenAICompatibility_KeepsWellKnownEndpointWithoutBaseURL(t *testing.T) {
+	cfg := &Config{
+		OpenAICompatibility: []OpenAICompatibility{
+			{Name: "opencode"},                             // known default, no base-url
+			{Name: "z-ai"},                                 // known default, no base-url
+			{Name: "mystery", BaseURL: ""},                 // unknown, no base-url -> dropped
+			{Name: "openrouter", BaseURL: "https://ex/v1"}, // explicit base URL kept as-is
+		},
+	}
+	cfg.SanitizeOpenAICompatibility()
+
+	byName := make(map[string]OpenAICompatibility, len(cfg.OpenAICompatibility))
+	for _, e := range cfg.OpenAICompatibility {
+		byName[e.Name] = e
+	}
+	if len(cfg.OpenAICompatibility) != 3 {
+		t.Fatalf("len = %d, want 3 (opencode, z-ai, openrouter kept; mystery dropped)", len(cfg.OpenAICompatibility))
+	}
+	if e, ok := byName["opencode"]; !ok || e.BaseURL != "https://opencode.ai" {
+		t.Fatalf("opencode BaseURL = %q, want https://opencode.ai", e.BaseURL)
+	}
+	if e, ok := byName["z-ai"]; !ok || e.BaseURL != "https://api.z.ai/v1" {
+		t.Fatalf("z-ai BaseURL = %q, want https://api.z.ai/v1", e.BaseURL)
+	}
+	if _, ok := byName["mystery"]; ok {
+		t.Fatal("mystery block should have been dropped (no base-url, no known default)")
+	}
+	if e, ok := byName["openrouter"]; !ok || e.BaseURL != "https://ex/v1" {
+		t.Fatalf("openrouter BaseURL = %q, want explicit https://ex/v1 preserved", e.BaseURL)
 	}
 }
 

@@ -425,12 +425,24 @@ func (r *ModelRegistry) RegisterClient(clientID, clientProvider string, models [
 	for _, id := range uniqueModelIDs {
 		model := newModels[id]
 		if reg, ok := r.models[id]; ok {
+			prev := reg.Info
 			reg.Info = cloneModelInfo(model)
+			// Preserve an existing known context window when the incoming model
+			// reports none, so a windowless client registration (e.g. opencode)
+			// does not zero a curated window already in the catalog (FR-003/FR-008).
+			if prev != nil {
+				if reg.Info.ContextLength <= 0 && prev.ContextLength > 0 {
+					reg.Info.ContextLength = prev.ContextLength
+				}
+				if reg.Info.MaxCompletionTokens <= 0 && prev.MaxCompletionTokens > 0 {
+					reg.Info.MaxCompletionTokens = prev.MaxCompletionTokens
+				}
+			}
 			if provider != "" {
 				if reg.InfoByProvider == nil {
 					reg.InfoByProvider = make(map[string]*ModelInfo)
 				}
-				reg.InfoByProvider[provider] = cloneModelInfo(model)
+				reg.InfoByProvider[provider] = cloneModelInfo(reg.Info)
 			}
 			reg.LastUpdated = now
 			// Re-registering an existing client/model binding starts a fresh registry

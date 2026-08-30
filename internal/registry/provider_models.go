@@ -26,6 +26,17 @@ const (
 	ParseStyleOpenCode ProviderParseStyle = "opencode"
 )
 
+// ConfiguredModel is a model the user explicitly selected for a dedicated provider
+// via the openai-compatibility `models:` list. ClientID is the client-visible id
+// (alias when set, otherwise the upstream name); UpstreamName is the provider's
+// native model id, used to look up the curated context window keyed by model id
+// (FR-009). Carrying both lets the catalog surface the user's chosen client id
+// while still sourcing an accurate window from the curated table.
+type ConfiguredModel struct {
+	ClientID     string
+	UpstreamName string
+}
+
 // ProviderConfig describes a dedicated OpenAI-compatible provider whose live
 // models endpoint is the source of truth for context windows (FR-002, FR-004).
 type ProviderConfig struct {
@@ -42,6 +53,11 @@ type ProviderConfig struct {
 	ModelsPath string
 	// ParseStyle selects the response parser (FR-003). Empty defaults to top-level.
 	ParseStyle ProviderParseStyle
+	// ConfiguredModels are the models the user explicitly selected for this provider
+	// from the openai-compatibility `models:` list. They are registered into the
+	// catalog so the user's chosen client ids appear even when no API key is set or
+	// the live endpoint is unreachable (FR-009).
+	ConfiguredModels []ConfiguredModel
 }
 
 // ProviderModelLimit is one model's reported window from a provider /models.
@@ -74,6 +90,14 @@ func NewProviderModelsFetcher(reg *ModelRegistry) *ProviderModelsFetcher {
 // keyed by the exact model id. A non-200 status or transport error is returned
 // without wiping any value; the caller decides retry policy (FR-007, FR-008).
 func (f *ProviderModelsFetcher) FetchAndMerge(ctx context.Context, prov ProviderConfig) error {
+	// Register the user's explicitly selected models first so they surface in the
+	// unified catalog (/v1/models, /api.json) regardless of whether the live endpoint
+	// is reachable or requires no key. The live fetch below may later refine their
+	// windows (FR-009).
+	if len(prov.ConfiguredModels) > 0 {
+		f.registerConfiguredModels(prov.Name, prov.ConfiguredModels, curatedWindowsFor(prov.Name))
+	}
+
 	url := resolveModelsURL(prov.BaseURL, prov.ModelsPath)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -222,7 +246,52 @@ func (r *ModelRegistry) MergeProviderContextWindows(provider string, items []Pro
 	r.invalidateAvailableModelsCacheLocked()
 }
 
-// ensureProviderModelLocked registers a model under the given provider if it is
+// registerConfiguredModels ensures each explicitly selected model is present in the
+// registry under its client-visible id, owned by the dedicated provider, so it
+// appears in /v1/models and /api.json. Context windows are sourced from the curated
+// table keyed by the upstream name (FR-009); the live fetch
+// (MergeProviderContextWindows) may later refine them. Registration happens before
+// the live fetch, so a failed or keyless endpoint never drops a configured model.
+func (f *ProviderModelsFetcher) registerConfiguredModels(provider string, configured []ConfiguredModel, curated map[string]ProviderModelLimit) {
+	f.registry.mutex.Lock()
+	defer f.registry.mutex.Unlock()
+	now := time.Now()
+	for _, cm := range configured {
+		id := strings.TrimSpace(cm.ClientID)
+		if id == "" {
+			id = strings.TrimSpace(cm.UpstreamName)
+		}
+		if id == "" {
+			continue
+		}
+		reg := f.registry.ensureProviderModelLocked(provider, id, now)
+		up := strings.TrimSpace(cm.UpstreamName)
+		if up == "" {
+			continue
+		}
+		c, ok := curated[up]
+		if !ok {
+			continue
+		}
+		info := reg.Info
+		if c.ContextLength > 0 {
+			info.ContextLength = c.ContextLength
+		}
+		if c.MaxCompletionTokens > 0 {
+			info.MaxCompletionTokens = c.MaxCompletionTokens
+		}
+		if pi := providerInfo(reg, provider); pi != nil && pi != info {
+			if c.ContextLength > 0 {
+				pi.ContextLength = c.ContextLength
+			}
+			if c.MaxCompletionTokens > 0 {
+				pi.MaxCompletionTokens = c.MaxCompletionTokens
+			}
+		}
+	}
+	f.registry.invalidateAvailableModelsCacheLocked()
+}
+
 // not already present. Caller must hold r.mutex. It mirrors the fields set by the
 // internal model registration so the model is immediately available in the catalog.
 func (r *ModelRegistry) ensureProviderModelLocked(provider, id string, now time.Time) *ModelRegistration {
