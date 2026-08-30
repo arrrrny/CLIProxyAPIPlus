@@ -1186,11 +1186,19 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 		if model.Description != "" {
 			result["description"] = model.Description
 		}
+		// Prefer the OpenAI-style context window; fall back to the Gemini-native
+		// inputTokenLimit so Gemini-family models (which only carry
+		// inputTokenLimit/outputTokenLimit) still expose a context window on the
+		// OpenAI-compatible /v1/models and /api.json endpoints.
 		if model.ContextLength > 0 {
 			result["context_length"] = model.ContextLength
+		} else if model.InputTokenLimit > 0 {
+			result["context_length"] = model.InputTokenLimit
 		}
 		if model.MaxCompletionTokens > 0 {
 			result["max_completion_tokens"] = model.MaxCompletionTokens
+		} else if model.OutputTokenLimit > 0 {
+			result["max_completion_tokens"] = model.OutputTokenLimit
 		}
 		if len(model.SupportedParameters) > 0 {
 			result["supported_parameters"] = append([]string(nil), model.SupportedParameters...)

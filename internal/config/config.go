@@ -771,6 +771,32 @@ func (m OpenAICompatibilityModel) GetAlias() string       { return m.Alias }
 func (m OpenAICompatibilityModel) GetDisplayName() string { return m.DisplayName }
 func (m OpenAICompatibilityModel) GetForceMapping() bool  { return m.ForceMapping }
 
+// DedicatedProviderConfigs returns the OpenAI-compatible providers that should be
+// refreshed from their live /v1/models endpoints for accurate context windows
+// (FR-002, FR-004, FR-007). Each entry maps an openai-compatibility block — keyed
+// by its Name — to a registry.ProviderConfig carrying the base URL and the first
+// API key. Disabled blocks and those missing a Name or BaseURL are skipped (the
+// latter are also dropped by SanitizeOpenAICompatibility). The provider Name is
+// preserved verbatim so the registry override is distinguishable from generic
+// "openai" (U13, A6).
+func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
+	out := make([]registry.ProviderConfig, 0, len(cfg.OpenAICompatibility))
+	for _, c := range cfg.OpenAICompatibility {
+		if c.Disabled || c.Name == "" || c.BaseURL == "" {
+			continue
+		}
+		pc := registry.ProviderConfig{
+			Name:    c.Name,
+			BaseURL: c.BaseURL,
+		}
+		if len(c.APIKeyEntries) > 0 {
+			pc.APIKey = c.APIKeyEntries[0].APIKey
+		}
+		out = append(out, pc)
+	}
+	return out
+}
+
 // LoadConfig reads a YAML configuration file from the given path,
 // unmarshals it into a Config struct, applies environment variable overrides,
 // and returns it.

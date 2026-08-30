@@ -86,6 +86,18 @@ func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
 			filteredModel["owned_by"] = ownedBy
 		}
 
+		// Carry the context window through from the registry when it is known
+		// (US1). The registry already provides context_length; omit it when
+		// absent or zero so downstream clients never see a fabricated value.
+		if cl, ok := model["context_length"]; ok && positiveInt(cl) {
+			filteredModel["context_length"] = cl
+		}
+
+		// max_completion_tokens is carried through with the same rule (US1).
+		if mc, ok := model["max_completion_tokens"]; ok && positiveInt(mc) {
+			filteredModel["max_completion_tokens"] = mc
+		}
+
 		filteredModels[i] = filteredModel
 	}
 
@@ -93,6 +105,23 @@ func (h *OpenAIAPIHandler) OpenAIModels(c *gin.Context) {
 		"object": "list",
 		"data":   filteredModels,
 	})
+}
+
+// positiveInt reports whether v is an integer greater than zero. It accepts both
+// int (registry-side values) and float64 (JSON-decoded) representations so the
+// handler can carry context-window fields through without fabricating zeros.
+func positiveInt(v any) bool {
+	switch n := v.(type) {
+	case int:
+		return n > 0
+	case float64:
+		return n > 0
+	case json.Number:
+		f, err := n.Float64()
+		return err == nil && f > 0
+	default:
+		return false
+	}
 }
 
 // ChatCompletions handles the /v1/chat/completions endpoint.
