@@ -4,14 +4,23 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 )
 
 // APIJSON serves a models.dev-format catalog built from the enriched registry
 // (US4 / FR-009). It exposes per-model limit.context / limit.output derived from
 // the registry's context_length / max_completion_tokens, so downstream consumers
 // (e.g. Quotio's ProxyBridge) read correct limits by construction.
+// Provider visibility is governed by the config.propagate_in_api allowlist: only
+// providers mapped to true are published. An empty/unset allowlist publishes every
+// provider (legacy behavior). This never changes request routing or /v1/models.
 func (h *OpenAIAPIHandler) APIJSON(c *gin.Context) {
-	c.JSON(http.StatusOK, buildCatalog(h.Models()))
+	models := h.Models()
+	if cfg := managementasset.GetCurrentConfig(); cfg != nil && len(cfg.PropagateInAPI) > 0 {
+		models = filterForAPIPropagation(models, cfg.PropagateInAPI)
+	}
+	c.JSON(http.StatusOK, buildCatalog(models))
 }
 
 // buildCatalog assembles the models.dev-format document from the available models.
@@ -73,4 +82,26 @@ func toIntValue(v any) int {
 	default:
 		return 0
 	}
+}
+
+// filterForAPIPropagation removes models whose provider (the model map "type"
+// field, e.g. "kiro", "claude", "opencode") is not enabled in allowlist.
+// An empty/nil allowlist publishes everything (legacy behavior). When an allowlist
+// is set, only providers explicitly mapped to true are published; a model with no
+// resolvable provider is hidden because it cannot match any allowlisted entry.
+func filterForAPIPropagation(models []map[string]any, allowlist map[string]bool) []map[string]any {
+	if len(allowlist) == 0 {
+		return models
+	}
+	out := make([]map[string]any, 0, len(models))
+	for _, m := range models {
+		provider, _ := m["type"].(string)
+		if provider == "" {
+			continue
+		}
+		if allowlist[provider] {
+			out = append(out, m)
+		}
+	}
+	return out
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
 	sdkconfig "github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
@@ -128,4 +130,120 @@ func modelKeys(m map[string]catalogModel) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// TestAPIJSON_PropagateInAPIAllowlist verifies that only providers mapped to true in
+// config.propagate_in_api appear in /api.json, while other connected providers stay hidden.
+// This is purely a catalog-visibility filter and must not affect /v1/models or routing.
+func TestAPIJSON_PropagateInAPIAllowlist(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reg := registry.GetGlobalRegistry()
+	const kiroID = "prop-api-kiro"
+	const claudeID = "prop-api-claude"
+	reg.RegisterClient(kiroID, "kiro", []*registry.ModelInfo{
+		{ID: "kiro-claude-opus-4-6", Object: "model", OwnedBy: "kiro", Type: "kiro", DisplayName: "Kiro Opus 4.6", ContextLength: 200000, MaxCompletionTokens: 64000},
+	})
+	reg.RegisterClient(claudeID, "claude", []*registry.ModelInfo{
+		{ID: "claude-opus-4-6", Object: "model", OwnedBy: "anthropic", Type: "claude", DisplayName: "Claude Opus 4.6", ContextLength: 200000, MaxCompletionTokens: 64000},
+	})
+	t.Cleanup(func() {
+		reg.UnregisterClient(kiroID)
+		reg.UnregisterClient(claudeID)
+		managementasset.SetCurrentConfig(nil)
+	})
+
+	managementasset.SetCurrentConfig(&config.Config{PropagateInAPI: map[string]bool{"kiro": true}})
+
+	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{}, nil))
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api.json", nil)
+	h.APIJSON(c)
+
+	var resp catalogResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal /api.json: %v", err)
+	}
+
+	if _, ok := resp.Cliproxy.Models["kiro-claude-opus-4-6"]; !ok {
+		t.Fatalf("kiro model missing from catalog when propagate_in_api{kiro:true}: %s", string(w.Body.Bytes()))
+	}
+	if _, ok := resp.Cliproxy.Models["claude-opus-4-6"]; ok {
+		t.Fatalf("claude model should be hidden by allowlist, got: %s", string(w.Body.Bytes()))
+	}
+}
+
+// TestAPIJSON_PropagateInAPIEmptyPublishesAll verifies the legacy behavior: when the
+// propagate_in_api map is empty/unset, every provider is published.
+func TestAPIJSON_PropagateInAPIEmptyPublishesAll(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reg := registry.GetGlobalRegistry()
+	const kiroID = "prop-api-empty-kiro"
+	const claudeID = "prop-api-empty-claude"
+	reg.RegisterClient(kiroID, "kiro", []*registry.ModelInfo{
+		{ID: "kiro-claude-opus-4-6", Object: "model", OwnedBy: "kiro", Type: "kiro", DisplayName: "Kiro Opus 4.6"},
+	})
+	reg.RegisterClient(claudeID, "claude", []*registry.ModelInfo{
+		{ID: "claude-opus-4-6", Object: "model", OwnedBy: "anthropic", Type: "claude", DisplayName: "Claude Opus 4.6"},
+	})
+	t.Cleanup(func() {
+		reg.UnregisterClient(kiroID)
+		reg.UnregisterClient(claudeID)
+		managementasset.SetCurrentConfig(nil)
+	})
+
+	managementasset.SetCurrentConfig(&config.Config{PropagateInAPI: map[string]bool{}})
+
+	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{}, nil))
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api.json", nil)
+	h.APIJSON(c)
+
+	var resp catalogResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal /api.json: %v", err)
+	}
+	if _, ok := resp.Cliproxy.Models["kiro-claude-opus-4-6"]; !ok {
+		t.Fatalf("kiro model missing with empty allowlist: %s", string(w.Body.Bytes()))
+	}
+	if _, ok := resp.Cliproxy.Models["claude-opus-4-6"]; !ok {
+		t.Fatalf("claude model missing with empty allowlist: %s", string(w.Body.Bytes()))
+	}
+}
+
+// TestFilterForAPIPropagation exercises the allowlist helper directly.
+func TestFilterForAPIPropagation(t *testing.T) {
+	models := []map[string]any{
+		{"id": "a", "type": "kiro"},
+		{"id": "b", "type": "claude"},
+		{"id": "c", "type": "openrouter"},
+		{"id": "d"}, // no provider
+	}
+
+	// Empty allowlist publishes everything (legacy behavior).
+	if got := filterForAPIPropagation(models, nil); len(got) != 4 {
+		t.Fatalf("nil allowlist: got %d models, want 4", len(got))
+	}
+	if got := filterForAPIPropagation(models, map[string]bool{}); len(got) != 4 {
+		t.Fatalf("empty allowlist: got %d models, want 4", len(got))
+	}
+
+	// Only kiro is allowlisted.
+	got := filterForAPIPropagation(models, map[string]bool{"kiro": true})
+	if len(got) != 1 || got[0]["id"] != "a" {
+		t.Fatalf("kiro-only allowlist: got %v, want only model a", got)
+	}
+
+	// Multiple providers allowlisted.
+	got = filterForAPIPropagation(models, map[string]bool{"kiro": true, "claude": true})
+	if len(got) != 2 {
+		t.Fatalf("kiro+claude allowlist: got %d models, want 2", len(got))
+	}
+
+	// false entries are hidden (allowlist is an opt-in).
+	got = filterForAPIPropagation(models, map[string]bool{"kiro": false, "claude": true})
+	if len(got) != 1 || got[0]["id"] != "b" {
+		t.Fatalf("false entry must hide: got %v, want only model b", got)
+	}
 }

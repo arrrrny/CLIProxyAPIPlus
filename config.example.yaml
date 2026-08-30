@@ -442,6 +442,16 @@ nonstream-keepalive-interval: 0
 #   kimi          -> https://api.kimi.com/coding/v1        (derived from kimi auth base URL)
 #   kilo          -> already a dedicated provider (existing kilo_executor fetch); reuse, do not re-add
 
+# propagate_in_api controls which provider catalogs appear in the generated
+# /api.json document. Keys are provider identifiers (e.g. "kiro", "claude",
+# "opencode", "opencode-go", "openrouter", "z-ai", "kilo"); value true publishes
+# that provider, false (or an omitted key) hides it. Leave the section out entirely
+# to publish every provider (legacy behavior). This only affects /api.json — it
+# does NOT change routing or the /v1/models response; connected providers still work.
+# Example: publish only Kiro in /api.json.
+# propagate_in_api:
+#   kiro: true
+
 # Vertex API keys (Vertex-compatible endpoints, base-url is optional)
 # vertex-api-key:
 #   - api-key: "vk-123..."                        # x-goog-api-key header
