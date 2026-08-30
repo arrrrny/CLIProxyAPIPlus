@@ -83,6 +83,45 @@ func TestAPIJSON_ExposesLimitContextOutputForKnownWindows(t *testing.T) {
 	}
 }
 
+// TestAPIJSON_GeminiNativeLimitsFallback verifies that a Gemini-family model which
+// only carries inputTokenLimit/outputTokenLimit (never context_length) still
+// exposes a context window on the OpenAI-compatible /api.json endpoint via the
+// registry's openai-handler fallback.
+func TestAPIJSON_GeminiNativeLimitsFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reg := registry.GetGlobalRegistry()
+	const clientID = "us4-gemini-native"
+	reg.RegisterClient(clientID, "gemini", []*registry.ModelInfo{
+		{ID: "gemini-2.5-pro", Object: "model", OwnedBy: "google", Type: "gemini", DisplayName: "Gemini 2.5 Pro", InputTokenLimit: 1048576, OutputTokenLimit: 65536},
+	})
+	t.Cleanup(func() { reg.UnregisterClient(clientID) })
+
+	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{}, nil))
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api.json", nil)
+	h.APIJSON(c)
+
+	var resp catalogResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal /api.json: %v", err)
+	}
+
+	entry, ok := resp.Cliproxy.Models["gemini-2.5-pro"]
+	if !ok {
+		t.Fatalf("gemini-2.5-pro missing from catalog: %s", string(w.Body.Bytes()))
+	}
+	if entry.ContextLength != 1048576 {
+		t.Fatalf("context_length = %d, want 1048576 (from inputTokenLimit fallback)", entry.ContextLength)
+	}
+	if entry.Limit["context"] != float64(1048576) {
+		t.Fatalf("limit.context = %v, want 1048576", entry.Limit["context"])
+	}
+	if entry.Limit["output"] != float64(65536) {
+		t.Fatalf("limit.output = %v, want 65536 (from outputTokenLimit fallback)", entry.Limit["output"])
+	}
+}
+
 func modelKeys(m map[string]catalogModel) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
