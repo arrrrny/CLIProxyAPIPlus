@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	stdlog "log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // ProviderConfig describes a dedicated OpenAI-compatible provider whose live
@@ -170,18 +171,18 @@ func (r *ProviderModelsRefresher) RefreshNow(ctx context.Context) error {
 			if firstErr == nil {
 				firstErr = err
 			}
-			stdlog.Printf("[provider-refresh] %s: %v", p.Name, err)
+			log.Warnf("[provider-refresh] %s: %v", p.Name, err)
 		}
 	}
 	return firstErr
 }
 
-// Start performs an immediate refresh and then refreshes on the configured
-// interval until ctx is cancelled (FR-007). It returns immediately; the ticker
-// runs in its own goroutine.
+// Start begins periodic refreshes on the configured interval until ctx is
+// cancelled or Stop is called (FR-007). The initial refresh runs inside the
+// ticker goroutine as its first tick, so Start returns immediately and never
+// blocks server startup on slow/unreachable providers (FR-008). Calling Start
+// more than once is a no-op.
 func (r *ProviderModelsRefresher) Start(ctx context.Context) {
-	r.RefreshNow(ctx)
-
 	r.mu.Lock()
 	if r.stop != nil {
 		r.mu.Unlock()
@@ -194,6 +195,10 @@ func (r *ProviderModelsRefresher) Start(ctx context.Context) {
 	ticker := time.NewTicker(r.interval)
 	go func() {
 		defer ticker.Stop()
+		// Best-effort immediate refresh without blocking server startup.
+		if err := r.RefreshNow(ctx); err != nil {
+			log.Warnf("[provider-refresh] initial refresh failed: %v", err)
+		}
 		for {
 			select {
 			case <-ctx.Done():
@@ -205,4 +210,15 @@ func (r *ProviderModelsRefresher) Start(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// Stop signals the ticker goroutine started by Start to exit. It is safe to
+// call multiple times and before Start (it is then a no-op).
+func (r *ProviderModelsRefresher) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stop != nil {
+		close(r.stop)
+		r.stop = nil
+	}
 }
