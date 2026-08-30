@@ -165,15 +165,6 @@ type Config struct {
 	// OpenAICompatibility defines OpenAI API compatibility configurations for external providers.
 	OpenAICompatibility []OpenAICompatibility `yaml:"openai-compatibility" json:"openai-compatibility"`
 
-	// PropagateInAPI controls which provider catalogs are published in the generated
-	// /api.json document. Keys are provider identifiers (e.g. "kiro", "claude",
-	// "opencode", "opencode-go", "openrouter", "z-ai", "kilo"); a value of true
-	// publishes that provider's models, false (or an absent key) hides them.
-	// When the map is empty or unset, every provider is published (legacy behavior).
-	// This only affects /api.json generation — it does not change request routing or
-	// the /v1/models response; connected providers keep working as before.
-	PropagateInAPI map[string]bool `yaml:"propagate_in_api" json:"propagate_in_api"`
-
 	// VertexCompatAPIKey defines Vertex AI-compatible API key configurations for third-party providers.
 	// Used for services that use Vertex AI-style paths but with simple API key authentication.
 	VertexCompatAPIKey []VertexCompatKey `yaml:"vertex-api-key" json:"vertex-api-key"`

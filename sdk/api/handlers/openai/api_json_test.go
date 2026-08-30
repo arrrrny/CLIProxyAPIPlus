@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
 	sdkconfig "github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
@@ -149,12 +147,9 @@ func TestAPIJSON_PropagateInAPIAllowlist(t *testing.T) {
 	t.Cleanup(func() {
 		reg.UnregisterClient(kiroID)
 		reg.UnregisterClient(claudeID)
-		managementasset.SetCurrentConfig(nil)
 	})
 
-	managementasset.SetCurrentConfig(&config.Config{PropagateInAPI: map[string]bool{"kiro": true}})
-
-	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{}, nil))
+	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{PropagateInAPI: map[string]bool{"kiro": true}}, nil))
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api.json", nil)
@@ -189,12 +184,9 @@ func TestAPIJSON_PropagateInAPIEmptyPublishesAll(t *testing.T) {
 	t.Cleanup(func() {
 		reg.UnregisterClient(kiroID)
 		reg.UnregisterClient(claudeID)
-		managementasset.SetCurrentConfig(nil)
 	})
 
-	managementasset.SetCurrentConfig(&config.Config{PropagateInAPI: map[string]bool{}})
-
-	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{}, nil))
+	h := NewOpenAIAPIHandler(handlers.NewBaseAPIHandlers(&sdkconfig.SDKConfig{PropagateInAPI: map[string]bool{}}, nil))
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodGet, "/api.json", nil)

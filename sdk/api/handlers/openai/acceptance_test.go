@@ -32,9 +32,9 @@ func newAcceptanceServer(t *testing.T) *httptest.Server {
 type apiJSONDoc struct {
 	Cliproxy struct {
 		Models map[string]struct {
-			ID           string `json:"id"`
-			Limit        map[string]any `json:"limit"`
-			ContextLength any `json:"context_length"`
+			ID            string         `json:"id"`
+			Limit         map[string]any `json:"limit"`
+			ContextLength any            `json:"context_length"`
 		} `json:"models"`
 	} `json:"cliproxy"`
 }

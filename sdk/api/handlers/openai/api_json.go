@@ -4,8 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 )
 
 // APIJSON serves a models.dev-format catalog built from the enriched registry
@@ -17,8 +15,8 @@ import (
 // provider (legacy behavior). This never changes request routing or /v1/models.
 func (h *OpenAIAPIHandler) APIJSON(c *gin.Context) {
 	models := h.Models()
-	if cfg := managementasset.GetCurrentConfig(); cfg != nil && len(cfg.PropagateInAPI) > 0 {
-		models = filterForAPIPropagation(models, cfg.PropagateInAPI)
+	if h.Cfg != nil && len(h.Cfg.PropagateInAPI) > 0 {
+		models = filterForAPIPropagation(models, h.Cfg.PropagateInAPI)
 	}
 	c.JSON(http.StatusOK, buildCatalog(models))
 }

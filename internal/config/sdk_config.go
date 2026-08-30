@@ -63,6 +63,15 @@ type SDKConfig struct {
 	// When false (default), providers must explicitly configure a proxy URL to use proxy.
 	// When true, the global proxy URL is used as fallback for providers without explicit proxy configuration.
 	ProxyEnabledByDefault bool `yaml:"proxy-enabled-by-default" json:"proxy-enabled-by-default"`
+
+	// PropagateInAPI controls which provider catalogs are published in the generated
+	// /api.json document. Keys are provider identifiers (e.g. "kiro", "claude",
+	// "opencode", "opencode-go", "openrouter", "z-ai", "kilo"); a value of true
+	// publishes that provider's models, false (or an absent key) hides them.
+	// When the map is empty or unset, every provider is published (legacy behavior).
+	// This only affects /api.json generation — it does not change request routing or
+	// the /v1/models response; connected providers keep working as before.
+	PropagateInAPI map[string]bool `yaml:"propagate_in_api" json:"propagate_in_api"`
 }
 
 // StreamingConfig holds server streaming behavior configuration.

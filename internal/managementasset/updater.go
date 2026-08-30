@@ -56,12 +56,6 @@ func SetCurrentConfig(cfg *config.Config) {
 	currentConfigPtr.Store(cfg)
 }
 
-// GetCurrentConfig returns the latest stored configuration snapshot, or nil if none
-// has been set yet.
-func GetCurrentConfig() *config.Config {
-	return currentConfigPtr.Load()
-}
-
 // StartAutoUpdater launches a background goroutine that periodically ensures the management asset is up to date.
 // It respects the disable-control-panel flag on every iteration and supports hot-reloaded configurations.
 func StartAutoUpdater(ctx context.Context, configFilePath string) {
