@@ -31,6 +31,18 @@ const (
 	// Kilo represents the Kilo AI provider identifier.
 	Kilo = "kilo"
 
+	// OpenRouter represents the OpenRouter provider identifier.
+	OpenRouter = "openrouter"
+
+	// OpenCode represents the OpenCode provider identifier.
+	OpenCode = "opencode"
+
+	// OpenCodeGo represents the OpenCode Go (mimo) provider identifier.
+	OpenCodeGo = "opencode-go"
+
+	// ZAi represents the z.ai provider identifier.
+	ZAi = "z-ai"
+
 	// GeminiCLI represents the Google Gemini CLI provider identifier.
 	GeminiCLI = "gemini-cli"
 

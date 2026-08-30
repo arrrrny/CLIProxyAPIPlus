@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginstore"
 	log "github.com/sirupsen/logrus"
@@ -720,6 +721,18 @@ type OpenAICompatibility struct {
 	// Models defines the model configurations including aliases for routing.
 	Models []OpenAICompatibilityModel `yaml:"models" json:"models"`
 
+	// ModelsPath is the provider-specific models-endpoint path appended to
+	// BaseURL when fetching live context windows (FR-002). When empty, a
+	// per-provider default is inferred from Name (e.g. opencode → /zen/v1/models,
+	// openrouter/z-ai → /models, others → /v1/models).
+	ModelsPath string `yaml:"models-path,omitempty" json:"models-path,omitempty"`
+
+	// ParseStyle selects how the provider's /models response is parsed for context
+	// windows. "" defaults to "top-level" (openrouter/z-ai shape); set "opencode"
+	// for endpoints that return ids only (windows come from the curated table).
+	// The kilo shape is handled by its own dedicated fetch path.
+	ParseStyle string `yaml:"parse-style,omitempty" json:"parse-style,omitempty"`
+
 	// Headers optionally adds extra HTTP headers for requests sent to this provider.
 	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 
@@ -786,8 +799,16 @@ func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
 			continue
 		}
 		pc := registry.ProviderConfig{
-			Name:    c.Name,
-			BaseURL: c.BaseURL,
+			Name:       c.Name,
+			BaseURL:    c.BaseURL,
+			ModelsPath: defaultProviderModelsPath(c.Name),
+			ParseStyle: defaultProviderParseStyle(c.Name),
+		}
+		if c.ModelsPath != "" {
+			pc.ModelsPath = c.ModelsPath
+		}
+		if c.ParseStyle != "" {
+			pc.ParseStyle = registry.ProviderParseStyle(c.ParseStyle)
 		}
 		if len(c.APIKeyEntries) > 0 {
 			pc.APIKey = c.APIKeyEntries[0].APIKey
@@ -795,6 +816,31 @@ func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
 		out = append(out, pc)
 	}
 	return out
+}
+
+// defaultProviderModelsPath returns the provider-specific /models endpoint path
+// appended to BaseURL when fetching live context windows (FR-002).
+func defaultProviderModelsPath(name string) string {
+	switch strings.ToLower(name) {
+	case constant.OpenCode, constant.OpenCodeGo:
+		return "/zen/v1/models"
+	case constant.OpenRouter, constant.ZAi:
+		return "/models"
+	default:
+		return "/v1/models"
+	}
+}
+
+// defaultProviderParseStyle returns how the provider's /models response is parsed
+// for context windows. "opencode" endpoints return ids only; windows are sourced
+// from the curated table. All others use the top-level shape.
+func defaultProviderParseStyle(name string) registry.ProviderParseStyle {
+	switch strings.ToLower(name) {
+	case constant.OpenCode, constant.OpenCodeGo:
+		return registry.ParseStyleOpenCode
+	default:
+		return registry.ParseStyleTopLevel
+	}
 }
 
 // LoadConfig reads a YAML configuration file from the given path,
