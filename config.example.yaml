@@ -426,6 +426,19 @@ nonstream-keepalive-interval: 0
 #         alias: "claude-opus-4.66"
 #       - name: "kimi-k2.5"
 #         alias: "claude-opus-4.66"
+#
+# Dedicated provider onboarding — base URLs for live context-window refresh (FR-002, FR-007).
+# Each block below is an independent openai-compatibility entry keyed by its `name`, which
+# becomes the model's registry Type/OwnedBy (distinguishable from generic "openai"). The
+# periodic refresher (default 6h, immediate on startup) GETs `<base-url>/v1/models` with the
+# Bearer key and merges the reported context_length / max_completion_tokens back into the
+# registry, so downstream /v1/models and /api.json expose accurate windows with no code change.
+#   openrouter    -> https://openrouter.ai/api/v1          (confirmed)
+#   z.ai          -> https://api.z.ai/v1                   (source doc)
+#   opencode      -> https://opencode.ai/zen/v1            (source doc)
+#   opencode-go   -> https://opencode.ai/zen/v1            (shares zen endpoint; confirm at deploy)
+#   kimi          -> https://api.kimi.com/coding/v1        (derived from kimi auth base URL)
+#   kilo          -> already a dedicated provider (existing kilo_executor fetch); reuse, do not re-add
 
 # Vertex API keys (Vertex-compatible endpoints, base-url is optional)
 # vertex-api-key:

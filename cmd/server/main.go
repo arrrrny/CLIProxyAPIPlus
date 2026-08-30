@@ -780,7 +780,7 @@ func main() {
 				// Standalone mode: start an embedded local server and connect TUI client to it.
 				managementasset.StartAutoUpdater(context.Background(), configFilePath)
 				misc.StartAntigravityVersionUpdater(context.Background())
-				startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
+				startModelCatalogUpdaters(localModel, cfg.Home.Enabled, cfg)
 				hook := tui.NewLogHook(2000)
 				hook.SetFormatter(&logging.LogFormatter{})
 				log.AddHook(hook)
@@ -856,6 +856,7 @@ func main() {
 			misc.StartAntigravityVersionUpdater(context.Background())
 			if !localModel && !cfg.Home.Enabled {
 				registry.StartModelsUpdater(context.Background())
+				startDedicatedProviderContextRefresher(cfg)
 			} else if cfg.Home.Enabled {
 				log.Info("Home mode: remote model updates disabled")
 			}
@@ -880,15 +881,27 @@ func modelCatalogUpdaterPlan(localModel, homeEnabled bool) (startModels, startCo
 	return !homeEnabled, true
 }
 
-func startModelCatalogUpdaters(localModel, homeEnabled bool) {
+func startModelCatalogUpdaters(localModel, homeEnabled bool, cfg *config.Config) {
 	startModels, startCodexClient := modelCatalogUpdaterPlan(localModel, homeEnabled)
 	if startCodexClient {
 		registry.StartCodexClientModelsUpdater(context.Background())
 	}
 	if startModels {
 		registry.StartModelsUpdater(context.Background())
+		startDedicatedProviderContextRefresher(cfg)
 	} else if homeEnabled {
 		log.Info("Home mode: remote models.json updates disabled; Codex client model list follows Home model IDs")
+	}
+}
+
+// startDedicatedProviderContextRefresher launches the periodic context-window
+// refresh for OpenAI-compatible dedicated providers (FR-007). It is a no-op when
+// no dedicated providers are configured.
+func startDedicatedProviderContextRefresher(cfg *config.Config) {
+	if cfgs := cfg.DedicatedProviderConfigs(); len(cfgs) > 0 {
+		fetcher := registry.NewProviderModelsFetcher(registry.GetGlobalRegistry())
+		refresher := registry.NewProviderModelsRefresher(fetcher, cfgs, 0)
+		refresher.Start(context.Background())
 	}
 }
 

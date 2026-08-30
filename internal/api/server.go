@@ -530,6 +530,7 @@ func (s *Server) setupRoutes() {
 	v1.Use(AuthMiddleware(s.accessManager))
 	{
 		v1.GET("/models", s.unifiedModelsHandler(openaiHandlers, claudeCodeHandlers))
+		v1.GET("/api.json", openaiHandlers.APIJSON)
 		v1.GET("/models/all", s.allModelsHandler())
 		v1.POST("/chat/completions", openaiHandlers.ChatCompletions)
 		v1.POST("/completions", openaiHandlers.Completions)
@@ -1262,7 +1263,7 @@ func (s *Server) allModelsHandler() gin.HandlerFunc {
 
 		// Get all available models from the registry
 		models := s.getAllAvailableModels()
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
 			"data":   models,
