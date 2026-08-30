@@ -822,12 +822,20 @@ func (cfg *Config) DedicatedProviderConfigs() []registry.ProviderConfig {
 // appended to BaseURL when fetching live context windows (FR-002).
 func defaultProviderModelsPath(name string) string {
 	switch strings.ToLower(name) {
-	case constant.OpenCode, constant.OpenCodeGo:
+	// OpenCode Go (mimo) and OpenCode (Zen) use distinct endpoints:
+	//   go  -> https://opencode.ai/zen/go/v1/models
+	//   zen -> https://opencode.ai/zen/v1/models
+	case constant.OpenCodeGo:
+		return "/zen/go/v1/models"
+	case constant.OpenCode:
 		return "/zen/v1/models"
 	case constant.OpenRouter, constant.ZAi:
 		return "/models"
 	default:
-		return "/v1/models"
+		// Documented base URLs already include /v1 (e.g. openrouter
+		// "https://openrouter.ai/api/v1"), so the suffix is just "/models".
+		// Returning "/v1/models" here would double the /v1 segment.
+		return "/models"
 	}
 }
 

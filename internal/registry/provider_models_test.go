@@ -354,3 +354,25 @@ func TestProviderFetcher_OpenCodeCuratedFallbackAndOmission(t *testing.T) {
 		t.Errorf("unknown-model ContextLength = %d, want 0 (omitted, not fabricated)", unknown.ContextLength)
 	}
 }
+
+// TestResolveModelsURL exercises the URL-building logic in isolation. It locks in
+// the doubled-/v1 regression guard: when a base URL already contains /v1, the
+// default provider path must append "/models" (not "/v1/models") so the result is
+// not <base>/v1/v1/models (see defaultProviderModelsPath).
+func TestResolveModelsURL(t *testing.T) {
+	cases := []struct {
+		base, path, want string
+	}{
+		{"https://api.example.com/v1", "", "https://api.example.com/v1/models"}, // legacy branch strips /v1 then re-adds
+		{"https://api.example.com/v1", "/models", "https://api.example.com/v1/models"},
+		{"https://api.example.com/v1", "/v1/models", "https://api.example.com/v1/v1/models"}, // documents the doubled behavior
+		{"https://opencode.ai", "/zen/v1/models", "https://opencode.ai/zen/v1/models"},
+		{"https://opencode.ai", "/zen/go/v1/models", "https://opencode.ai/zen/go/v1/models"},
+		{"https://api.kimi.com/coding/v1", "/models", "https://api.kimi.com/coding/v1/models"},
+	}
+	for _, c := range cases {
+		if got := resolveModelsURL(c.base, c.path); got != c.want {
+			t.Errorf("resolveModelsURL(%q, %q) = %q, want %q", c.base, c.path, got, c.want)
+		}
+	}
+}

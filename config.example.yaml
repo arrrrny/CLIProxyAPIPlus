@@ -430,13 +430,15 @@ nonstream-keepalive-interval: 0
 # Dedicated provider onboarding — base URLs for live context-window refresh (FR-002, FR-007).
 # Each block below is an independent openai-compatibility entry keyed by its `name`, which
 # becomes the model's registry Type/OwnedBy (distinguishable from generic "openai"). The
-# periodic refresher (default 6h, immediate on startup) GETs `<base-url>/v1/models` with the
+# periodic refresher (default 6h, immediate on startup) GETs `<base-url><models-path>` with the
 # Bearer key and merges the reported context_length / max_completion_tokens back into the
 # registry, so downstream /v1/models and /api.json expose accurate windows with no code change.
+# Each base URL already includes its /v1 segment; the per-provider models-path (ModelsPath) is
+# appended to it (openrouter/z.ai -> "/models", opencode -> "/zen/v1/models", opencode-go -> "/zen/go/v1/models").
 #   openrouter    -> https://openrouter.ai/api/v1          (confirmed)
 #   z.ai          -> https://api.z.ai/v1                   (source doc)
-#   opencode      -> https://opencode.ai/zen/v1            (source doc)
-#   opencode-go   -> https://opencode.ai/zen/v1            (shares zen endpoint; confirm at deploy)
+#   opencode      -> https://opencode.ai                   (source doc; ModelsPath supplies /zen/v1/models)
+#   opencode-go   -> https://opencode.ai                   (Go/mimo endpoint; ModelsPath supplies /zen/go/v1/models)
 #   kimi          -> https://api.kimi.com/coding/v1        (derived from kimi auth base URL)
 #   kilo          -> already a dedicated provider (existing kilo_executor fetch); reuse, do not re-add
 
