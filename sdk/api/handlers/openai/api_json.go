@@ -18,13 +18,32 @@ func (h *OpenAIAPIHandler) APIJSON(c *gin.Context) {
 	if h.Cfg != nil && len(h.Cfg.PropagateInAPI) > 0 {
 		models = filterForAPIPropagation(models, h.Cfg.PropagateInAPI)
 	}
-	c.JSON(http.StatusOK, buildCatalog(models))
+	c.JSON(http.StatusOK, buildCatalog(models, apiBaseURL(c.Request)))
+}
+
+// apiBaseURL derives the proxy's public base URL (models.dev catalog shape) from the
+// incoming request so the published /api.json is self-describing. Downstream consumers
+// use it as the OpenAI-compatible endpoint, which always points at /v1.
+func apiBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r != nil && r.TLS != nil {
+		scheme = "https"
+	}
+	host := ""
+	if r != nil {
+		host = r.Host
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	return scheme + "://" + host + "/v1"
 }
 
 // buildCatalog assembles the models.dev-format document from the available models.
 // limit is omitted entirely for a model with no known context window (U17) so a
-// downstream consumer never reads a fabricated zero.
-func buildCatalog(models []map[string]any) map[string]any {
+// downstream consumer never reads a fabricated zero. apiBaseURL is the proxy's
+// public base URL (+/v1) published for downstream OpenAI-compatible consumers.
+func buildCatalog(models []map[string]any, apiBaseURL string) map[string]any {
 	entries := make(map[string]any, len(models))
 	for _, m := range models {
 		id, _ := m["id"].(string)
@@ -53,7 +72,9 @@ func buildCatalog(models []map[string]any) map[string]any {
 		"cliproxy": map[string]any{
 			"id":     "cliproxy",
 			"name":   "CLIProxyAPI",
+			"api":    apiBaseURL,
 			"type":   "openai",
+			"env":    []string{"CLIPROXY_API_KEY"},
 			"models": entries,
 		},
 	}
