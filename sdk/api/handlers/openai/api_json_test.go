@@ -25,7 +25,7 @@ type catalogModel struct {
 type catalogResponse struct {
 	Cliproxy struct {
 		Models map[string]catalogModel `json:"models"`
-	} `json:"cliproxy"`
+	} `json:"quotio"`
 }
 
 func TestAPIJSON_ExposesLimitContextOutputForKnownWindows(t *testing.T) {

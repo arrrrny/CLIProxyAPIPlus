@@ -36,7 +36,7 @@ type apiJSONDoc struct {
 			Limit         map[string]any `json:"limit"`
 			ContextLength any            `json:"context_length"`
 		} `json:"models"`
-	} `json:"cliproxy"`
+	} `json:"quotio"`
 }
 
 func apiJSONModel(t *testing.T, body []byte, id string) map[string]any {
