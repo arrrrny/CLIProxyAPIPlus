@@ -58,6 +58,11 @@ type ProviderConfig struct {
 	// catalog so the user's chosen client ids appear even when no API key is set or
 	// the live endpoint is unreachable (FR-009).
 	ConfiguredModels []ConfiguredModel
+	// LimitToSelectedModels, when true, tells the proxy to only expose the models
+	// the user has explicitly selected via the openai-compatibility `models:` list.
+	// When true, the upstream model fetch is skipped and only the configured models
+	// appear in /v1/models and /api.json (FR-015).
+	LimitToSelectedModels bool
 }
 
 // ProviderModelLimit is one model's reported window from a provider /models.
@@ -87,8 +92,12 @@ func NewProviderModelsFetcher(reg *ModelRegistry) *ProviderModelsFetcher {
 
 // FetchAndMerge GETs the provider's models endpoint (BaseURL + ModelsPath) with
 // Authorization: Bearer <APIKey> and merges the reported windows into the registry
-// keyed by the exact model id. A non-200 status or transport error is returned
-// without wiping any value; the caller decides retry policy (FR-007, FR-008).
+// keyed by the exact model id. When LimitToSelectedModels is true the live
+// upstream fetch is skipped entirely — the user's explicitly configured models
+// are already registered via registerConfiguredModels above and appear in
+// /v1/models /api.json. The live fetch below may later refine their windows
+// when a key is available (FR-009). A non-200 status or transport error is
+// returned without wiping any value; the caller decides retry policy (FR-007, FR-008).
 func (f *ProviderModelsFetcher) FetchAndMerge(ctx context.Context, prov ProviderConfig) error {
 	// Register the user's explicitly selected models first so they surface in the
 	// unified catalog (/v1/models, /api.json) regardless of whether the live endpoint
@@ -96,6 +105,14 @@ func (f *ProviderModelsFetcher) FetchAndMerge(ctx context.Context, prov Provider
 	// windows (FR-009).
 	if len(prov.ConfiguredModels) > 0 {
 		f.registerConfiguredModels(prov.Name, prov.ConfiguredModels, curatedWindowsFor(prov.Name))
+	}
+
+	// Skip upstream fetch when the user has selected only specific models.
+	// The configured models are already registered above; fetching all upstream
+	// models would re-introduce unselected models into the catalog (FR-015).
+	if prov.LimitToSelectedModels {
+		log.Debugf("[provider-refresh] %s: LimitToSelectedModels=true, skipping upstream fetch", prov.Name)
+		return nil
 	}
 
 	url := resolveModelsURL(prov.BaseURL, prov.ModelsPath)
