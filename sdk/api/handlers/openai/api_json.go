@@ -69,7 +69,7 @@ func buildCatalog(models []map[string]any, apiBaseURL string) map[string]any {
 		entries[id] = entry
 	}
 	return map[string]any{
-		"quotio": map[string]any{
+		"cliproxy": map[string]any{
 			"id":     "cliproxy",
 			"name":   "CLIProxyAPI",
 			"api":    apiBaseURL,
