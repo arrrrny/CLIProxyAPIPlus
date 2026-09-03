@@ -425,8 +425,9 @@ func ProcessToolUseEvent(event map[string]interface{}, currentToolUse *ToolUseSt
 
 					var input map[string]interface{}
 					if err := json.Unmarshal([]byte(repaired), &input); err != nil {
-						log.Warnf("kiro: failed to parse interleaved tool input: %v, raw: %s", err, raw)
-						input = make(map[string]interface{})
+						log.Warnf("kiro: failed to parse interleaved tool input: %v, raw_len=%d, raw: %s", err, len(raw), raw)
+						input = recoverPartialInput(extractPartialFields(repaired))
+						log.Warnf("kiro: recovered partial fields after repair failure: %v", input)
 					}
 					incomplete.Input = input
 				}
@@ -471,8 +472,15 @@ func ProcessToolUseEvent(event map[string]interface{}, currentToolUse *ToolUseSt
 		repairedJSON := RepairJSON(fullInput)
 		var finalInput map[string]interface{}
 		if err := json.Unmarshal([]byte(repairedJSON), &finalInput); err != nil {
-			log.Warnf("kiro: failed to parse accumulated tool input: %v, raw: %s", err, fullInput)
-			finalInput = make(map[string]interface{})
+			log.Warnf("kiro: failed to parse accumulated tool input: %v, raw_len=%d, raw: %s", err, len(fullInput), fullInput)
+			// Instead of silently emitting an empty input (which causes the
+			// downstream SDK to reject the call with "must have required
+			// property 'command'"), recover whatever fields we can parse and
+			// log enough context to diagnose the upstream stream. Truncated
+			// tools still flow through DetectTruncation below and get dropped
+			// via the soft-failure path.
+			finalInput = recoverPartialInput(extractPartialFields(repairedJSON))
+			log.Warnf("kiro: recovered partial fields after repair failure: %v", finalInput)
 		}
 
 		// Detect truncation for all tools
@@ -540,4 +548,22 @@ func DeduplicateToolUses(toolUses []KiroToolUse) []KiroToolUse {
 	}
 
 	return unique
+}
+
+// recoverPartialInput converts the display-only string map returned by
+// extractPartialFields into the map[string]interface{} the tool_use pipeline
+// expects. Used as a fallback when json.Unmarshal fails on the repaired
+// stream buffer so the downstream SDK still receives whatever fields we
+// could salvage instead of an empty input (which causes the OpenAI/Anthropic
+// schema validator to reject the call with "must have required property
+// 'command'" on tools like Bash).
+func recoverPartialInput(partial map[string]string) map[string]interface{} {
+	if len(partial) == 0 {
+		return map[string]interface{}{}
+	}
+	out := make(map[string]interface{}, len(partial))
+	for k, v := range partial {
+		out[k] = v
+	}
+	return out
 }
