@@ -125,7 +125,7 @@ func ConvertKiroStreamToOpenAI(ctx context.Context, model string, originalReques
 			if partialJSON != "" {
 				// Get the tool index from content block index
 				blockIndex := int(eventJSON.Get("index").Int())
-				chunk := BuildOpenAISSEToolCallArgumentsDelta(state, partialJSON, blockIndex-1) // Adjust for 0-based tool index
+				chunk := BuildOpenAISSEToolCallArgumentsDelta(state, partialJSON, blockIndex)
 				results = append(results, []byte(chunk))
 			}
 		}
