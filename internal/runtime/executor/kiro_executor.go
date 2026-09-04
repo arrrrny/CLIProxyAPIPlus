@@ -1899,8 +1899,22 @@ func (e *KiroExecutor) parseEventStream(body io.Reader) (string, []kiroclaude.Ki
 								ToolUseID: toolUseID,
 								Name:      kirocommon.GetStringValue(tu, "name"),
 							}
-							if input, ok := tu["input"].(map[string]interface{}); ok {
-								toolUse.Input = input
+							if inputRaw, ok := tu["input"]; ok {
+								switch v := inputRaw.(type) {
+								case map[string]interface{}:
+									toolUse.Input = v
+								case string:
+									var parsed map[string]interface{}
+									if err := json.Unmarshal([]byte(v), &parsed); err != nil {
+										log.Warnf("kiro: failed to parse tool input string from assistantResponse: %v, raw: %.200s", err, v)
+										toolUse.Input = kiroclaude.RecoverPartialInput(kiroclaude.ExtractPartialFields(v))
+									} else {
+										toolUse.Input = parsed
+									}
+								}
+							}
+							if toolUse.Input == nil {
+								log.Warnf("kiro: tool use %s (ID: %s) has nil input", toolUse.Name, toolUse.ToolUseID)
 							}
 							toolUses = append(toolUses, toolUse)
 						}
@@ -1927,8 +1941,23 @@ func (e *KiroExecutor) parseEventStream(body io.Reader) (string, []kiroclaude.Ki
 							ToolUseID: toolUseID,
 							Name:      kirocommon.GetStringValue(tu, "name"),
 						}
-						if input, ok := tu["input"].(map[string]interface{}); ok {
-							toolUse.Input = input
+						if inputRaw, ok := tu["input"]; ok {
+							switch v := inputRaw.(type) {
+							case map[string]interface{}:
+								toolUse.Input = v
+							case string:
+								// Kiro streams tool input as a JSON string; parse it
+								var parsed map[string]interface{}
+								if err := json.Unmarshal([]byte(v), &parsed); err != nil {
+									log.Warnf("kiro: failed to parse tool input string from assistantResponse: %v, raw: %.200s", err, v)
+									toolUse.Input = kiroclaude.RecoverPartialInput(kiroclaude.ExtractPartialFields(v))
+								} else {
+									toolUse.Input = parsed
+								}
+							}
+						}
+						if toolUse.Input == nil {
+							log.Warnf("kiro: tool use %s (ID: %s) has nil input", toolUse.Name, toolUse.ToolUseID)
 						}
 						toolUses = append(toolUses, toolUse)
 					}
@@ -3144,7 +3173,20 @@ func (e *KiroExecutor) streamToChannel(ctx context.Context, body io.Reader, out 
 				}
 
 				// Send input_json_delta with the tool input
-				if input, ok := tu["input"].(map[string]interface{}); ok {
+				if inputRaw, ok := tu["input"]; ok {
+					var input map[string]interface{}
+					switch v := inputRaw.(type) {
+					case map[string]interface{}:
+						input = v
+					case string:
+						if err := json.Unmarshal([]byte(v), &input); err != nil {
+							log.Warnf("kiro: failed to parse tool input string in streamToChannel: %v, raw: %.200s", err, v)
+							input = kiroclaude.RecoverPartialInput(kiroclaude.ExtractPartialFields(v))
+						}
+					}
+					if input == nil {
+						log.Warnf("kiro: tool use has nil input in streamToChannel")
+					}
 					inputJSON, err := json.Marshal(input)
 					if err != nil {
 						log.Debugf("kiro: failed to marshal tool input: %v", err)
