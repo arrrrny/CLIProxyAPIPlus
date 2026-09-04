@@ -1221,7 +1221,9 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 		return result
 
 	case "claude", "kiro", "antigravity":
-		// Claude, Kiro, and Antigravity all use Claude-compatible format for Claude Code client
+		// Claude, Kiro, and Antigravity all use Claude-compatible format for Claude Code client.
+		// Synced from upstream CLIProxyAPI: Claude Code expects max_input_tokens/max_tokens
+		// (not context_length/max_completion_tokens) to correctly size conversation context.
 		result := map[string]any{
 			"id":       model.ID,
 			"object":   "model",
@@ -1249,16 +1251,18 @@ func (r *ModelRegistry) convertModelToMap(model *ModelInfo, handlerType string) 
 				"dynamic_allowed": model.Thinking.DynamicAllowed,
 			}
 		}
-		// Include context limits so Claude Code can manage conversation
-		// context correctly, especially for Copilot-proxied models whose
-		// real prompt limit (128K-168K) is much lower than the 1M window
-		// that Claude Code may assume for Opus 4.6 with 1M context enabled.
-		if model.ContextLength > 0 {
-			result["context_length"] = model.ContextLength
+		// Claude-native token limit fields expected by Claude Code.
+		// Falls back to documented defaults when the model carries no explicit limit.
+		maxInput := model.ContextLength
+		if maxInput <= 0 {
+			maxInput = DefaultClaudeMaxInputTokens
 		}
-		if model.MaxCompletionTokens > 0 {
-			result["max_completion_tokens"] = model.MaxCompletionTokens
+		maxOutput := model.MaxCompletionTokens
+		if maxOutput <= 0 {
+			maxOutput = DefaultClaudeMaxOutputTokens
 		}
+		result["max_input_tokens"] = maxInput
+		result["max_tokens"] = maxOutput
 		return result
 
 	case "gemini":
