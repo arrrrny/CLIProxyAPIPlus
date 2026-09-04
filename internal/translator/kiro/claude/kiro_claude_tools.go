@@ -426,7 +426,7 @@ func ProcessToolUseEvent(event map[string]interface{}, currentToolUse *ToolUseSt
 					var input map[string]interface{}
 					if err := json.Unmarshal([]byte(repaired), &input); err != nil {
 						log.Warnf("kiro: failed to parse interleaved tool input: %v, raw_len=%d, raw: %s", err, len(raw), raw)
-						input = recoverPartialInput(extractPartialFields(repaired))
+						input = RecoverPartialInput(ExtractPartialFields(repaired))
 						log.Warnf("kiro: recovered partial fields after repair failure: %v", input)
 					}
 					incomplete.Input = input
@@ -479,7 +479,7 @@ func ProcessToolUseEvent(event map[string]interface{}, currentToolUse *ToolUseSt
 			// log enough context to diagnose the upstream stream. Truncated
 			// tools still flow through DetectTruncation below and get dropped
 			// via the soft-failure path.
-			finalInput = recoverPartialInput(extractPartialFields(repairedJSON))
+			finalInput = RecoverPartialInput(ExtractPartialFields(repairedJSON))
 			log.Warnf("kiro: recovered partial fields after repair failure: %v", finalInput)
 		}
 
@@ -550,14 +550,14 @@ func DeduplicateToolUses(toolUses []KiroToolUse) []KiroToolUse {
 	return unique
 }
 
-// recoverPartialInput converts the display-only string map returned by
-// extractPartialFields into the map[string]interface{} the tool_use pipeline
+// RecoverPartialInput converts the display-only string map returned by
+// ExtractPartialFields into the map[string]interface{} the tool_use pipeline
 // expects. Used as a fallback when json.Unmarshal fails on the repaired
 // stream buffer so the downstream SDK still receives whatever fields we
 // could salvage instead of an empty input (which causes the OpenAI/Anthropic
 // schema validator to reject the call with "must have required property
 // 'command'" on tools like Bash).
-func recoverPartialInput(partial map[string]string) map[string]interface{} {
+func RecoverPartialInput(partial map[string]string) map[string]interface{} {
 	if len(partial) == 0 {
 		return map[string]interface{}{}
 	}

@@ -105,7 +105,7 @@ func DetectTruncation(toolName, toolUseID, rawInput string, parsedInput map[stri
 		if looksLikeTruncatedJSON(rawInput) {
 			info.IsTruncated = true
 			info.TruncationType = TruncationTypeInvalidJSON
-			info.ParsedFields = extractPartialFields(rawInput)
+			info.ParsedFields = ExtractPartialFields(rawInput)
 			info.ErrorMessage = buildTruncationErrorMessage(toolName, info.TruncationType, info.ParsedFields, rawInput)
 			log.Warnf("kiro: truncation detected [%s] for tool %s (ID: %s): JSON parse failed, raw length=%d bytes",
 				info.TruncationType, toolName, toolUseID, len(rawInput))
@@ -208,9 +208,10 @@ func looksLikeTruncatedJSON(raw string) bool {
 	return false
 }
 
-// extractPartialFields attempts to extract any field names from malformed JSON.
+// ExtractPartialFields attempts to extract any field names from malformed JSON.
 // This helps provide context about what was received before truncation.
-func extractPartialFields(raw string) map[string]string {
+// Exported for reuse by the executor's streaming tool-use extraction path.
+func ExtractPartialFields(raw string) map[string]string {
 	fields := make(map[string]string)
 
 	// Simple pattern matching for "key": "value" or "key": value patterns

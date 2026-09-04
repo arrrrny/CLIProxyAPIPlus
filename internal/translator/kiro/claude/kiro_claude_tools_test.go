@@ -59,12 +59,12 @@ func TestRepairJSON_QuirkyButComplete(t *testing.T) {
 // non-nil empty map when nothing can be salvaged, instead of nil (which
 // would marshal to JSON null).
 func TestRecoverPartialInput_Empty(t *testing.T) {
-	got := recoverPartialInput(nil)
+	got := RecoverPartialInput(nil)
 	if got == nil {
-		t.Fatal("recoverPartialInput(nil) returned nil; want empty map")
+		t.Fatal("RecoverPartialInput(nil) returned nil; want empty map")
 	}
 	if len(got) != 0 {
-		t.Fatalf("recoverPartialInput(nil) returned %d keys; want 0", len(got))
+		t.Fatalf("RecoverPartialInput(nil) returned %d keys; want 0", len(got))
 	}
 	b, err := json.Marshal(got)
 	if err != nil {
@@ -83,7 +83,7 @@ func TestRecoverPartialInput_PreservesFields(t *testing.T) {
 		"command":     "echo hello",
 		"description": "test command",
 	}
-	got := recoverPartialInput(partial)
+	got := RecoverPartialInput(partial)
 	if got["command"] != "echo hello" {
 		t.Errorf("command lost in conversion: got %v", got["command"])
 	}
