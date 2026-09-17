@@ -197,8 +197,16 @@ func (cfg *Config) SanitizeOpenAICompatibility() {
 		e.BaseURL = strings.TrimSpace(e.BaseURL)
 		e.Headers = NormalizeHeaders(e.Headers)
 		if e.BaseURL == "" {
-			// Skip providers with no base-url; treated as removed
-			continue
+			// Providers with a well-known base URL (opencode, opencode-go,
+			// openrouter, z-ai) are usable without an explicit base-url: the
+			// dedicated-provider refresh and routing fall back to the default
+			// endpoint (FR-002). Only blocks with neither an explicit base-url
+			// nor a known default are unroutable and therefore dropped.
+			if def := defaultProviderBaseURL(e.Name); def != "" {
+				e.BaseURL = def
+			} else {
+				continue
+			}
 		}
 		out = append(out, e)
 	}

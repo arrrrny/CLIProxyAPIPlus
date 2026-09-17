@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
 )
 
 type sseEvent struct {

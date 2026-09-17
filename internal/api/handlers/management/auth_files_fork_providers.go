@@ -442,6 +442,9 @@ func (h *Handler) RequestGeminiCLIToken(c *gin.Context) {
 			Storage:  &ts,
 			Metadata: recordMetadata,
 		}
+		if errGuard := guardOAuthSessionPendingForSave(state, "gemini"); errGuard != nil {
+			return
+		}
 		savedPath, errSave := h.saveTokenRecord(ctx, record)
 		if errSave != nil {
 			log.Errorf("Failed to save token to file: %v", errSave)
@@ -596,6 +599,9 @@ func (h *Handler) RequestGitLabToken(c *gin.Context) {
 			FileName: fileName,
 			Label:    identifier,
 			Metadata: metadata,
+		}
+		if errGuard := guardOAuthSessionPendingForSave(state, "gitlab"); errGuard != nil {
+			return
 		}
 		savedPath, errSave := h.saveTokenRecord(ctx, record)
 		if errSave != nil {
@@ -785,6 +791,9 @@ func (h *Handler) RequestGitHubToken(c *gin.Context) {
 			Metadata: metadata,
 		}
 
+		if errGuard := guardOAuthSessionPendingForSave(state, "github-copilot"); errGuard != nil {
+			return
+		}
 		savedPath, errSave := h.saveTokenRecord(ctx, record)
 		if errSave != nil {
 			log.Errorf("Failed to save authentication tokens: %v", errSave)
@@ -1297,6 +1306,9 @@ func (h *Handler) RequestKiroToken(c *gin.Context) {
 						},
 					}
 
+					if errGuard := guardOAuthSessionPendingForSave(state, "kiro"); errGuard != nil {
+						return
+					}
 					savedPath, errSave := h.saveTokenRecord(ctx, record)
 					if errSave != nil {
 						log.Errorf("Failed to save authentication tokens: %v", errSave)
@@ -1451,6 +1463,9 @@ func (h *Handler) RequestKiroToken(c *gin.Context) {
 						},
 					}
 
+					if errGuard := guardOAuthSessionPendingForSave(state, "kiro"); errGuard != nil {
+						return
+					}
 					savedPath, errSave := h.saveTokenRecord(ctx, record)
 					if errSave != nil {
 						log.Errorf("Failed to save authentication tokens: %v", errSave)
@@ -1554,6 +1569,9 @@ func (h *Handler) RequestKiloToken(c *gin.Context) {
 			},
 		}
 
+		if errGuard := guardOAuthSessionPendingForSave(state, "kilo"); errGuard != nil {
+			return
+		}
 		savedPath, errSave := h.saveTokenRecord(ctx, record)
 		if errSave != nil {
 			log.Errorf("Failed to save authentication tokens: %v", errSave)
@@ -1636,6 +1654,9 @@ func (h *Handler) RequestCursorToken(c *gin.Context) {
 			FileName: fileName,
 			Label:    displayLabel,
 			Metadata: metadata,
+		}
+		if errGuard := guardOAuthSessionPendingForSave(state, "cursor"); errGuard != nil {
+			return
 		}
 		savedPath, errSave := h.saveTokenRecord(ctx, record)
 		if errSave != nil {
