@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	internallogging "github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
+	coresession "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/session"
 	coreusage "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/usage"
 )
 
@@ -17,11 +18,245 @@ func TestUsageQueuePluginPayloadIncludesStableFieldsAndSuccess(t *testing.T) {
 	withEnabledQueue(t, func() {
 		ctx := internallogging.WithRequestID(context.Background(), "ctx-request-id")
 		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithClientRequestMetadata(ctx, internallogging.ClientRequestMetadata{
+			ClientIP:      "192.0.2.10",
+			XForwardedFor: "203.0.113.5, 198.51.100.8",
+			UserAgent:     "test-client/1.0",
+		})
 		ctx = internallogging.WithResponseStatusHolder(ctx)
 		internallogging.SetResponseStatus(ctx, http.StatusOK)
 
 		plugin := &usageQueuePlugin{}
 		plugin.HandleUsage(ctx, coreusage.Record{
+			Provider:            "openai",
+			ExecutorType:        "KimiExecutor",
+			Model:               "gpt-5.4",
+			Alias:               "client-gpt",
+			APIKey:              "test-key",
+			AuthIndex:           "0",
+			AccessTokenSHA256:   "token-version-hash",
+			AuthType:            "apikey",
+			Source:              "user@example.com",
+			ReasoningEffort:     "medium",
+			ServiceTier:         "auto",
+			ResponseServiceTier: "default",
+			Generate:            coreusage.GenerateFlag(true),
+			RequestedAt:         time.Date(2026, 4, 25, 0, 0, 0, 0, time.UTC),
+			Latency:             1500 * time.Millisecond,
+			Detail: coreusage.Detail{
+				InputTokens:  10,
+				OutputTokens: 20,
+				TotalTokens:  30,
+			},
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "provider", "openai")
+		requireStringField(t, payload, "model", "gpt-5.4")
+		requireStringField(t, payload, "alias", "client-gpt")
+		requireStringField(t, payload, "endpoint", "POST /v1/chat/completions")
+		requireStringField(t, payload, "auth_type", "apikey")
+		requireStringField(t, payload, "access_token_sha256", "token-version-hash")
+		requireMissingField(t, payload, "user_api_key")
+		requireStringField(t, payload, "request_id", "ctx-request-id")
+		requireStringField(t, payload, "client_ip", "192.0.2.10")
+		requireStringField(t, payload, "x_forwarded_for", "203.0.113.5, 198.51.100.8")
+		requireStringField(t, payload, "user_agent", "test-client/1.0")
+		requireStringField(t, payload, "reasoning_effort", "medium")
+		requireStringField(t, payload, "service_tier", "auto")
+		requireMissingField(t, payload, "request_service_tier")
+		requireStringField(t, payload, "response_service_tier", "default")
+		requireIntField(t, payload, "accounting_version", coreusage.TokenAccountingSchemaVersion)
+		requireTokenBreakdown(t, payload, coreusage.TokenAccountingQualityComplete, 30)
+		requireTokensBoolField(t, payload, "cache_read_tokens_present", true)
+		requireHeaderField(t, payload, "response_headers", "X-Upstream-Request-Id", []string{"upstream-req-1"})
+		requireHeaderField(t, payload, "response_headers", "Retry-After", []string{"30"})
+		requireBoolField(t, payload, "failed", false)
+		requireBoolField(t, payload, "generate", true)
+		requireBoolField(t, payload, "stream", false)
+		requireFailField(t, payload, http.StatusOK, "")
+	})
+}
+
+func TestUsageQueuePluginNormalizesDirectSDKUsageByProvider(t *testing.T) {
+	tests := []struct {
+		provider  string
+		wantTotal int
+	}{
+		{provider: "openai", wantTotal: 130},
+		{provider: "gemini", wantTotal: 142},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			withEnabledQueue(t, func() {
+				ctx := internallogging.WithResponseStatusHolder(context.Background())
+				internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+				(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+					Provider: tt.provider,
+					Model:    "direct-sdk-model",
+					Detail: coreusage.Detail{
+						InputTokens:     100,
+						OutputTokens:    30,
+						ReasoningTokens: 12,
+					},
+				})
+
+				payload := popSinglePayload(t)
+				requireIntField(t, requireTokensPayload(t, payload), "total_tokens", tt.wantTotal)
+				requireTokenBreakdown(t, payload, coreusage.TokenAccountingQualityComplete, int64(tt.wantTotal))
+			})
+		})
+	}
+}
+
+func TestUsageQueuePluginPayloadIncludesGenerateFalse(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithResponseStatusHolder(context.Background())
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+			Provider: "openai",
+			Model:    "gpt-5.4",
+			Generate: coreusage.GenerateFlag(false),
+			Detail: coreusage.Detail{
+				InputTokens: 1,
+				TotalTokens: 1,
+			},
+		})
+
+		payload := popSinglePayload(t)
+		requireBoolField(t, payload, "generate", false)
+	})
+}
+
+func TestUsageQueuePluginPayloadDefaultsGenerateTrueWhenOmitted(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithResponseStatusHolder(context.Background())
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		// Legacy callers construct usage.Record without Generate; omission must publish as true.
+		(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+			Provider: "openai",
+			Model:    "gpt-5.4",
+			Detail: coreusage.Detail{
+				InputTokens: 1,
+				TotalTokens: 1,
+			},
+		})
+
+		payload := popSinglePayload(t)
+		requireBoolField(t, payload, "generate", true)
+	})
+}
+
+func TestUsageQueuePluginPublishesStreamFlag(t *testing.T) {
+	for _, stream := range []bool{true, false} {
+		t.Run(map[bool]string{true: "stream_true", false: "stream_false"}[stream], func(t *testing.T) {
+			withEnabledQueue(t, func() {
+				ctx := internallogging.WithResponseStatusHolder(context.Background())
+				internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+				(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+					Provider: "openai",
+					Model:    "gpt-5.4",
+					Stream:   stream,
+					Detail: coreusage.Detail{
+						InputTokens: 1,
+						TotalTokens: 1,
+					},
+				})
+
+				payload := popSinglePayload(t)
+				requireBoolField(t, payload, "stream", stream)
+			})
+		})
+	}
+}
+
+func TestUsageQueuePluginPreservesLegacyCachedOnlyUsage(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithResponseStatusHolder(context.Background())
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+			Provider: "openai",
+			Model:    "gpt-5.4",
+			Detail: coreusage.Detail{
+				CachedTokens: 13,
+			},
+		})
+
+		payload := popSinglePayload(t)
+		requireTokensBoolField(t, payload, "cache_read_tokens_present", true)
+		tokens := requireTokensPayload(t, payload)
+		requireIntField(t, tokens, "cache_read_tokens", 13)
+		requireIntField(t, tokens, "total_tokens", 13)
+		requireTokenBreakdown(t, payload, coreusage.TokenAccountingQualityUnclassified, 13)
+	})
+}
+
+func TestUsageQueuePluginEmitsSingleCanonicalAutoTier(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := coreusage.WithServiceTier(context.Background(), coreusage.AutoServiceTier)
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+			Provider: "openai",
+			Model:    "gpt-5.4",
+			Detail: coreusage.Detail{
+				InputTokens: 1,
+				TotalTokens: 1,
+			},
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "service_tier", "auto")
+		requireMissingField(t, payload, "request_service_tier")
+	})
+}
+
+func TestUsageQueuePluginAcceptsDeprecatedRequestTierRecordField(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithResponseStatusHolder(context.Background())
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		(&usageQueuePlugin{}).HandleUsage(ctx, coreusage.Record{
+			Provider:           "openai",
+			Model:              "gpt-5.4",
+			RequestServiceTier: "priority",
+			Detail:             coreusage.Detail{InputTokens: 1, TotalTokens: 1},
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "service_tier", "priority")
+		requireMissingField(t, payload, "request_service_tier")
+	})
+}
+
+func TestUsageQueuePluginAsyncUsesRecordResponseHeaders(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithRequestID(context.Background(), "ctx-request-id")
+		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		ctx = internallogging.WithResponseHeadersHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+		initialHeaders := http.Header{}
+		initialHeaders.Set("X-Upstream-Request-Id", "upstream-req-1")
+		internallogging.SetResponseHeaders(ctx, initialHeaders)
+
+		mgr := coreusage.NewManager(16)
+		defer mgr.Stop()
+
+		mgr.Register(pluginFunc(func(ctx context.Context, _ coreusage.Record) {
+			nextHeaders := http.Header{}
+			nextHeaders.Set("X-Upstream-Request-Id", "upstream-req-2")
+			internallogging.SetResponseHeaders(ctx, nextHeaders)
+		}))
+		mgr.Register(&usageQueuePlugin{})
+
+		mgr.Publish(ctx, coreusage.Record{
 			Provider:    "openai",
 			Model:       "gpt-5.4",
 			Alias:       "client-gpt",
@@ -36,18 +271,11 @@ func TestUsageQueuePluginPayloadIncludesStableFieldsAndSuccess(t *testing.T) {
 				OutputTokens: 20,
 				TotalTokens:  30,
 			},
+			ResponseHeaders: internallogging.GetResponseHeaders(ctx),
 		})
 
-		payload := popSinglePayload(t)
-		requireStringField(t, payload, "provider", "openai")
-		requireStringField(t, payload, "model", "gpt-5.4")
-		requireStringField(t, payload, "alias", "client-gpt")
-		requireStringField(t, payload, "endpoint", "POST /v1/chat/completions")
-		requireStringField(t, payload, "auth_type", "apikey")
-		requireMissingField(t, payload, "user_api_key")
-		requireStringField(t, payload, "request_id", "ctx-request-id")
-		requireBoolField(t, payload, "failed", false)
-		requireFailField(t, payload, http.StatusOK, "")
+		payload := waitForSinglePayload(t, 2*time.Second)
+		requireHeaderField(t, payload, "response_headers", "X-Upstream-Request-Id", []string{"upstream-req-1"})
 	})
 }
 
@@ -228,6 +456,38 @@ func requireStringField(t *testing.T, payload map[string]json.RawMessage, key, w
 	}
 }
 
+func requireIntField(t *testing.T, payload map[string]json.RawMessage, key string, want int) {
+	t.Helper()
+
+	raw, ok := payload[key]
+	if !ok {
+		t.Fatalf("payload missing %q", key)
+	}
+	var got int
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal %q: %v", key, err)
+	}
+	if got != want {
+		t.Fatalf("%s = %d, want %d", key, got, want)
+	}
+}
+
+func requireTokenBreakdown(t *testing.T, payload map[string]json.RawMessage, quality coreusage.TokenAccountingQuality, total int64) {
+	t.Helper()
+
+	raw, ok := payload["token_breakdown"]
+	if !ok {
+		t.Fatal("payload missing token_breakdown")
+	}
+	var breakdown coreusage.TokenBreakdown
+	if err := json.Unmarshal(raw, &breakdown); err != nil {
+		t.Fatalf("unmarshal token_breakdown: %v", err)
+	}
+	if !breakdown.Valid() || breakdown.Quality != quality || breakdown.TotalTokens != total {
+		t.Fatalf("token_breakdown = %+v, want quality=%s total=%d", breakdown, quality, total)
+	}
+}
+
 func requireMissingField(t *testing.T, payload map[string]json.RawMessage, key string) {
 	t.Helper()
 
@@ -293,4 +553,152 @@ func requireFailField(t *testing.T, payload map[string]json.RawMessage, wantStat
 	if got.StatusCode != wantStatus || got.Body != wantBody {
 		t.Fatalf("fail = {status_code:%d body:%q}, want {status_code:%d body:%q}", got.StatusCode, got.Body, wantStatus, wantBody)
 	}
+}
+
+func requireHeaderField(t *testing.T, payload map[string]json.RawMessage, field, key string, want []string) {
+	t.Helper()
+
+	raw, ok := payload[field]
+	if !ok {
+		t.Fatalf("payload missing %q", field)
+	}
+	var headers map[string][]string
+	if err := json.Unmarshal(raw, &headers); err != nil {
+		t.Fatalf("unmarshal %q: %v", field, err)
+	}
+	got, ok := headers[key]
+	if !ok {
+		t.Fatalf("%s missing header %q", field, key)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("%s[%q] = %v, want %v", field, key, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%s[%q] = %v, want %v", field, key, got, want)
+		}
+	}
+}
+
+func TestUsageQueuePluginPayloadIncludesExplicitSessionHierarchy(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithRequestID(context.Background(), "ctx-session-req-1")
+		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithClientRequestMetadata(ctx, internallogging.ClientRequestMetadata{
+			ClientIP:        "192.0.2.10",
+			SessionID:       "slot:pi-worker-1",
+			ParentSessionID: "slot:pi-main-root",
+		})
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		plugin := &usageQueuePlugin{}
+		plugin.HandleUsage(ctx, coreusage.Record{
+			Provider:        "openai",
+			Model:           "gpt-5.6-sol",
+			APIKey:          "test-key",
+			SessionID:       "slot:pi-worker-1",
+			ParentSessionID: "slot:pi-main-root",
+			RequestedAt:     time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+			Latency:         5000 * time.Millisecond,
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "request_id", "ctx-session-req-1")
+		wantSession := coresession.NormalizeToCanonicalUUID("slot:pi-worker-1")
+		wantParent := coresession.NormalizeToCanonicalUUID("slot:pi-main-root")
+		requireStringField(t, payload, "session_id", wantSession)
+		requireStringField(t, payload, "parent_session_id", wantParent)
+		if len(wantSession) != 36 || wantSession[14] != '8' {
+			t.Fatalf("expected 36-char UUIDv8 for session_id, got %q", wantSession)
+		}
+		if len(wantParent) != 36 || wantParent[14] != '8' {
+			t.Fatalf("expected 36-char UUIDv8 for parent_session_id, got %q", wantParent)
+		}
+	})
+}
+
+func TestUsageQueuePluginPayloadNormalizesPrefixedNativeUUID(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithRequestID(context.Background(), "ctx-native-uuid-1")
+		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		plugin := &usageQueuePlugin{}
+		plugin.HandleUsage(ctx, coreusage.Record{
+			Provider:        "codex",
+			Model:           "gpt-5.6-sol",
+			APIKey:          "test-key",
+			SessionID:       "codex:01a07e72-c84d-7fd3-8207-d217b41cc649",
+			ParentSessionID: "codex:01a07e71-a1b2-7c3d-98e1-f23456789abc",
+			RequestedAt:     time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+			Latency:         1000 * time.Millisecond,
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "session_id", "01a07e72-c84d-7fd3-8207-d217b41cc649")
+		requireStringField(t, payload, "parent_session_id", "01a07e71-a1b2-7c3d-98e1-f23456789abc")
+	})
+}
+
+func TestUsageQueuePluginPayloadPreventsSelfReferentialLoop(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithRequestID(context.Background(), "ctx-loop-req-1")
+		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		plugin := &usageQueuePlugin{}
+		plugin.HandleUsage(ctx, coreusage.Record{
+			Provider:        "openai",
+			Model:           "gpt-5.6-sol",
+			APIKey:          "test-key",
+			SessionID:       "loop-sess-1",
+			ParentSessionID: "loop-sess-1",
+			RequestedAt:     time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+			Latency:         1000 * time.Millisecond,
+		})
+
+		payload := popSinglePayload(t)
+		requireStringField(t, payload, "request_id", "ctx-loop-req-1")
+		wantSession := coresession.NormalizeToCanonicalUUID("loop-sess-1")
+		requireStringField(t, payload, "session_id", wantSession)
+		if _, exists := payload["parent_session_id"]; exists {
+			t.Fatalf("expected parent_session_id to be omitted on self-referential loop, got %s", payload["parent_session_id"])
+		}
+	})
+}
+
+func TestUsageQueuePluginPayloadSameOriginFallback(t *testing.T) {
+	withEnabledQueue(t, func() {
+		ctx := internallogging.WithRequestID(context.Background(), "ctx-same-origin-1")
+		ctx = internallogging.WithEndpoint(ctx, "POST /v1/chat/completions")
+		ctx = internallogging.WithClientRequestMetadata(ctx, internallogging.ClientRequestMetadata{
+			SessionID:       "old-root",
+			ParentSessionID: "old-parent",
+		})
+		ctx = internallogging.WithResponseStatusHolder(ctx)
+		internallogging.SetResponseStatus(ctx, http.StatusOK)
+
+		plugin := &usageQueuePlugin{}
+		// Record explicitly defines an independent root session without parent.
+		// It should NOT pick up old-parent from context.
+		plugin.HandleUsage(ctx, coreusage.Record{
+			Provider:        "openai",
+			Model:           "gpt-5.6-sol",
+			APIKey:          "test-key",
+			SessionID:       "new-custom-root",
+			ParentSessionID: "",
+			RequestedAt:     time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC),
+			Latency:         1000 * time.Millisecond,
+		})
+
+		payload := popSinglePayload(t)
+		wantSession := coresession.NormalizeToCanonicalUUID("new-custom-root")
+		requireStringField(t, payload, "session_id", wantSession)
+		if _, exists := payload["parent_session_id"]; exists {
+			t.Fatalf("expected parent_session_id to be omitted when record is independent root, got %s", payload["parent_session_id"])
+		}
+	})
 }

@@ -21,3 +21,12 @@ type HomeConfig struct {
 	DisableClusterDiscovery bool          `yaml:"disable_cluster_discovery" json:"disable_cluster_discovery"`
 	TLS                     HomeTLSConfig `yaml:"tls" json:"tls"`
 }
+
+// NormalizeHomePort ensures that the CPA server port received from Home is valid,
+// defaulting to 8317 when omitted or non-positive.
+func NormalizeHomePort(port int) int {
+	if port <= 0 {
+		return 8317
+	}
+	return port
+}
