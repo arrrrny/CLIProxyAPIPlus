@@ -1251,7 +1251,7 @@ func extractImages(content gjson.Result) []cursorproto.ImageData {
 		if part.Get("type").String() == "image_url" {
 			url := part.Get("image_url.url").String()
 			if strings.HasPrefix(url, "data:") {
-				img := parseDataURL(url)
+				img := parseCursorDataURL(url)
 				if img != nil {
 					images = append(images, *img)
 				}
@@ -1261,7 +1261,7 @@ func extractImages(content gjson.Result) []cursorproto.ImageData {
 	return images
 }
 
-func parseDataURL(url string) *cursorproto.ImageData {
+func parseCursorDataURL(url string) *cursorproto.ImageData {
 	// data:image/png;base64,...
 	if !strings.HasPrefix(url, "data:") {
 		return nil

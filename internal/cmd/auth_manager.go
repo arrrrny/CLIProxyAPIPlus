@@ -5,7 +5,9 @@ import (
 )
 
 // newAuthManager creates a new authentication manager instance with all supported
-// authenticators and a file-based token store.
+// authenticators and a file-based token store. It initializes authenticators for
+// Codex, Claude, Antigravity, Kimi, xAI, Devin, Meta, Kiro, GitHub Copilot, Kilo,
+// GitLab, CodeBuddy, and Cursor providers.
 //
 // Returns:
 //   - *sdkAuth.Manager: A configured authentication manager instance
@@ -16,6 +18,9 @@ func newAuthManager() *sdkAuth.Manager {
 		sdkAuth.NewClaudeAuthenticator(),
 		sdkAuth.NewAntigravityAuthenticator(),
 		sdkAuth.NewKimiAuthenticator(),
+		sdkAuth.NewXAIAuthenticator(),
+		sdkAuth.NewDevinAuthenticator(),
+		sdkAuth.NewMetaAuthenticator(),
 		sdkAuth.NewKiroAuthenticator(),
 		sdkAuth.NewGitHubCopilotAuthenticator(),
 		sdkAuth.NewKiloAuthenticator(),

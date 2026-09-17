@@ -19,6 +19,10 @@ import (
 // Returns:
 //   - []byte: The transformed request data in OpenAI-compatible format
 func ConvertOpenAIRequestToOpenAI(modelName string, inputRawJSON []byte, _ bool) []byte {
+	currentModel := gjson.GetBytes(inputRawJSON, "model")
+	if currentModel.Type == gjson.String && currentModel.String() == modelName {
+		return inputRawJSON
+	}
 	updatedJSON, err := sjson.SetBytes(inputRawJSON, "model", modelName)
 	if err != nil {
 		return inputRawJSON

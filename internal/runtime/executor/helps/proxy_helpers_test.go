@@ -29,84 +29,45 @@ func TestNewProxyAwareHTTPClientDirectBypassesGlobalProxy(t *testing.T) {
 	}
 }
 
-func TestNewProxyAwareHTTPClientProxyDisabledByDefault(t *testing.T) {
-	t.Parallel()
+func TestNewDevinHTTPClient_ReusesTransportFromContext(t *testing.T) {
+	baseTransport := &http.Transport{}
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", baseTransport)
 
-	// With ProxyEnabledByDefault=false (default), providers without explicit proxy URL
-	// should not use the global proxy, even if one is configured
-	client := NewProxyAwareHTTPClient(
-		context.Background(),
-		&config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080", ProxyEnabledByDefault: false}},
-		&cliproxyauth.Auth{ProxyURL: ""}, // No explicit proxy
-		0,
-	)
+	c1 := NewDevinHTTPClient(ctx, nil, nil, 0)
+	c2 := NewDevinHTTPClient(ctx, nil, nil, 0)
 
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport type = %T, want *http.Transport", client.Transport)
+	if c1.Transport != c2.Transport {
+		t.Errorf("expected c1.Transport == c2.Transport across requests, got different pointers %p vs %p", c1.Transport, c2.Transport)
 	}
-	// Should use direct transport (no proxy function) when proxy is disabled by default
-	if transport.Proxy != nil {
-		t.Fatal("expected direct transport when proxy is disabled by default and auth has no proxy")
+
+	tr, ok := c1.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", c1.Transport)
+	}
+	if !tr.DisableCompression {
+		t.Error("expected DisableCompression = true")
 	}
 }
 
-func TestNewProxyAwareHTTPClientProxyEnabledByDefault(t *testing.T) {
-	t.Parallel()
+func TestNewDevinHTTPClient_NonStandardRoundTripperDisablesGzip(t *testing.T) {
+	var seenEncoding string
+	customRT := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		seenEncoding = req.Header.Get("Accept-Encoding")
+		return &http.Response{StatusCode: 200}, nil
+	})
+	ctx := context.WithValue(context.Background(), "cliproxy.roundtripper", customRT)
 
-	// With ProxyEnabledByDefault=true, providers without explicit proxy URL
-	// should use the global proxy
-	client := NewProxyAwareHTTPClient(
-		context.Background(),
-		&config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080", ProxyEnabledByDefault: true}},
-		&cliproxyauth.Auth{ProxyURL: ""}, // No explicit proxy
-		0,
-	)
+	c := NewDevinHTTPClient(ctx, nil, nil, 0)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.invalid", nil)
+	_, _ = c.Transport.RoundTrip(req)
 
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport type = %T, want *http.Transport", client.Transport)
-	}
-	// Should use the global proxy when proxy is enabled by default
-	if transport.Proxy == nil {
-		t.Fatal("expected proxy transport when proxy is enabled by default")
-	}
-
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
-	proxyURL, err := transport.Proxy(req)
-	if err != nil {
-		t.Fatalf("transport.Proxy() error = %v", err)
-	}
-	if proxyURL == nil || proxyURL.String() != "http://global-proxy.example.com:8080" {
-		t.Fatalf("proxy URL = %v, want http://global-proxy.example.com:8080", proxyURL)
+	if seenEncoding != "identity" {
+		t.Errorf("expected Accept-Encoding: identity, got %q", seenEncoding)
 	}
 }
 
-func TestNewProxyAwareHTTPClientExplicitAuthProxyTakesPrecedence(t *testing.T) {
-	t.Parallel()
+type roundTripperFunc func(req *http.Request) (*http.Response, error)
 
-	// Even when ProxyEnabledByDefault=false, explicit auth proxy should be used
-	client := NewProxyAwareHTTPClient(
-		context.Background(),
-		&config.Config{SDKConfig: sdkconfig.SDKConfig{ProxyURL: "http://global-proxy.example.com:8080", ProxyEnabledByDefault: false}},
-		&cliproxyauth.Auth{ProxyURL: "http://auth-proxy.example.com:8080"},
-		0,
-	)
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("transport type = %T, want *http.Transport", client.Transport)
-	}
-	if transport.Proxy == nil {
-		t.Fatal("expected proxy transport when auth has explicit proxy URL")
-	}
-
-	req, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
-	proxyURL, err := transport.Proxy(req)
-	if err != nil {
-		t.Fatalf("transport.Proxy() error = %v", err)
-	}
-	if proxyURL == nil || proxyURL.String() != "http://auth-proxy.example.com:8080" {
-		t.Fatalf("proxy URL = %v, want http://auth-proxy.example.com:8080", proxyURL)
-	}
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

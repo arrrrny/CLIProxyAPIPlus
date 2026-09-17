@@ -25,6 +25,9 @@ func ConvertInteractionsRequestToAntigravity(modelName string, inputRawJSON []by
 	appendInteractionsInputToAntigravity(&contentItems, root.Get("input"))
 	out = translatorcommon.SetRawArrayItems(out, "request.contents", contentItems)
 	out = copyInteractionsToolsToAntigravity(out, root, functionNameMap)
+	if gjson.GetBytes(out, "request.toolConfig.functionCallingConfig.mode").String() == "NONE" {
+		out, _ = sjson.DeleteBytes(out, "request.tools")
+	}
 	out = rewriteInteractionsFunctionNames(out, functionNameMap)
 	out = attachDefaultAntigravitySafetySettings(out)
 	return out
@@ -53,11 +56,16 @@ func rewriteInteractionsFunctionNames(out []byte, functionNameMap map[string]str
 			content.Get("parts").ForEach(func(_, part gjson.Result) bool {
 				partJSON := []byte(part.Raw)
 				for _, field := range []string{"functionCall", "functionResponse"} {
-					name := part.Get(field + ".name").String()
+					nameResult := part.Get(field + ".name")
+					name := nameResult.String()
 					if name == "" {
 						continue
 					}
-					partJSON, _ = sjson.SetBytes(partJSON, field+".name", util.MapSanitizedFunctionName(functionNameMap, name))
+					mappedName := util.MapSanitizedFunctionName(functionNameMap, name)
+					if nameResult.Type == gjson.String && mappedName == name {
+						continue
+					}
+					partJSON, _ = sjson.SetBytes(partJSON, field+".name", mappedName)
 					partsChanged = true
 				}
 				partItems = append(partItems, partJSON)
@@ -77,12 +85,17 @@ func rewriteInteractionsFunctionNames(out []byte, functionNameMap map[string]str
 		for contentIndex, content := range contents.Array() {
 			for partIndex, part := range content.Get("parts").Array() {
 				for _, field := range []string{"functionCall", "functionResponse"} {
-					name := part.Get(field + ".name").String()
+					nameResult := part.Get(field + ".name")
+					name := nameResult.String()
 					if name == "" {
 						continue
 					}
+					mappedName := util.MapSanitizedFunctionName(functionNameMap, name)
+					if nameResult.Type == gjson.String && mappedName == name {
+						continue
+					}
 					path := fmt.Sprintf("request.contents.%d.parts.%d.%s.name", contentIndex, partIndex, field)
-					out, _ = sjson.SetBytes(out, path, util.MapSanitizedFunctionName(functionNameMap, name))
+					out, _ = sjson.SetBytes(out, path, mappedName)
 				}
 			}
 		}
@@ -91,17 +104,26 @@ func rewriteInteractionsFunctionNames(out []byte, functionNameMap map[string]str
 	allowedPath := "request.toolConfig.functionCallingConfig.allowedFunctionNames"
 	allowedNames := gjson.GetBytes(out, allowedPath)
 	if allowedNames.IsArray() {
+		namesChanged := false
 		nameItems := make([][]byte, 0, 4)
 		allowedNames.ForEach(func(_, name gjson.Result) bool {
-			mappedName, _ := json.Marshal(util.MapSanitizedFunctionName(functionNameMap, name.String()))
-			nameItems = append(nameItems, mappedName)
+			mappedName := util.MapSanitizedFunctionName(functionNameMap, name.String())
+			namesChanged = namesChanged || name.Type != gjson.String || mappedName != name.String()
+			mappedNameJSON, _ := json.Marshal(mappedName)
+			nameItems = append(nameItems, mappedNameJSON)
 			return true
 		})
-		out, _ = sjson.SetRawBytes(out, allowedPath, translatorcommon.JoinRawArray(nameItems))
+		if namesChanged {
+			out, _ = sjson.SetRawBytes(out, allowedPath, translatorcommon.JoinRawArray(nameItems))
+		}
 	} else {
 		for index, name := range allowedNames.Array() {
+			mappedName := util.MapSanitizedFunctionName(functionNameMap, name.String())
+			if name.Type == gjson.String && mappedName == name.String() {
+				continue
+			}
 			path := fmt.Sprintf("%s.%d", allowedPath, index)
-			out, _ = sjson.SetBytes(out, path, util.MapSanitizedFunctionName(functionNameMap, name.String()))
+			out, _ = sjson.SetBytes(out, path, mappedName)
 		}
 	}
 	return out
@@ -176,12 +198,13 @@ func copyInteractionsReasoningToAntigravity(out []byte, root gjson.Result) []byt
 		effort = strings.ToLower(strings.TrimSpace(reasoning.Get("thinking_level").String()))
 	}
 	if effort != "" {
+		// Thinking amount and summary visibility are independent. This OpenAI-style
+		// compatibility alias controls only the amount; includeThoughts is written
+		// below only for an explicit Interactions summary selector.
 		if effort == "auto" {
 			out, _ = sjson.SetBytes(out, "request.generationConfig.thinkingConfig.thinkingBudget", -1)
-			out, _ = sjson.SetBytes(out, "request.generationConfig.thinkingConfig.includeThoughts", true)
 		} else {
 			out, _ = sjson.SetBytes(out, "request.generationConfig.thinkingConfig.thinkingLevel", effort)
-			out, _ = sjson.SetBytes(out, "request.generationConfig.thinkingConfig.includeThoughts", effort != "none")
 		}
 	}
 	if summary := reasoning.Get("summary"); summary.Exists() {
@@ -494,6 +517,10 @@ func appendInteractionsFunctionResultToAntigravity(items *[][]byte, step gjson.R
 }
 
 func copyInteractionsToolsToAntigravity(out []byte, root gjson.Result, functionNameMap map[string]string) []byte {
+	if gjson.GetBytes(out, "request.toolConfig.functionCallingConfig.mode").String() == "NONE" {
+		out, _ = sjson.DeleteBytes(out, "request.tools")
+		return out
+	}
 	tools := root.Get("tools")
 	if !tools.Exists() {
 		return out
@@ -572,7 +599,6 @@ func antigravityFunctionDeclarationJSON(decl gjson.Result, functionNameMap map[s
 	if responseSchema := fn.Get("responseJsonSchema"); responseSchema.Exists() {
 		out, _ = sjson.SetRawBytes(out, "responseJsonSchema", []byte(responseSchema.Raw))
 	}
-	out, _ = sjson.DeleteBytes(out, "strict")
 	return out
 }
 
@@ -689,20 +715,17 @@ func antigravityInputAudioMimeType(format string) string {
 }
 
 func antigravityThinkingSummariesIncludeThoughts(summary gjson.Result) (bool, bool) {
-	switch summary.Type {
-	case gjson.True:
-		return true, true
-	case gjson.False:
-		return false, true
-	case gjson.String:
-		switch strings.ToLower(strings.TrimSpace(summary.String())) {
-		case "", "none", "off", "false", "disabled":
-			return false, true
-		default:
-			return true, true
-		}
+	if summary.Type != gjson.String {
+		return false, false
 	}
-	return false, false
+	switch strings.ToLower(strings.TrimSpace(summary.String())) {
+	case "auto":
+		return true, true
+	case "none":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func convertSnakeCaseKeysToCamelCaseForAntigravity(raw []byte) []byte {

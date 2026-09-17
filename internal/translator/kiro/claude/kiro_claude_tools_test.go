@@ -146,7 +146,7 @@ func TestProcessToolUseEvent_RepairFailureRecoversPartial(t *testing.T) {
 		t.Errorf("name = %s, want Bash", tu.Name)
 	}
 	// The critical assertion: input MUST NOT be empty for a tool with required
-	 // fields, otherwise the downstream SDK rejects the call.
+	// fields, otherwise the downstream SDK rejects the call.
 	if tu.Input == nil {
 		t.Fatal("input is nil — should be empty map or partial fields")
 	}

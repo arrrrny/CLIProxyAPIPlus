@@ -58,6 +58,7 @@ internal/registry/kilo_models.go                           :: KiloModel
 internal/runtime/executor/gemini_cli_executor.go           :: geminiOAuthScopes
 
 # --- dedicated model providers (spec 002) + provider parse styles ---
+internal/config/fork_dedicated_providers.go                :: DedicatedProviderConfigs
 internal/registry/dedicated_provider_models.go             :: openCodeCuratedWindows
 internal/registry/provider_models.go                       :: ProviderParseStyle
 sdk/api/handlers/openai/endpoint_compat.go                 :: resolveEndpointOverride
@@ -75,7 +76,18 @@ internal/api/handlers/management/api_keys_post.go          :: PostAPIKey
 #     These are the dangerous ones: nothing conflicts, upstream just wins the
 #     hunk and the fork's provider plumbing disappears.
 internal/config/config.go                                  :: KiroPreferredEndpoint
-internal/api/handlers/management/auth_files.go             :: RequestKiroToken
+#     The well-known base-url fallback for the fork's dedicated providers
+#     (opencode, opencode-go, openrouter, z-ai) lives in upstream's
+#     config_normalization.go. The 2026-09-17 sync resolved that file from
+#     upstream's side and dropped the fallback — the marker below catches a
+#     repeat, which otherwise silently deletes `openai-compatibility` blocks
+#     for those providers instead of defaulting their base-url.
+internal/config/config_normalization.go                    :: defaultProviderBaseURL
+#     Moved here during the 2026-09-17 upstream sync (SPEC 22): upstream
+#     refactored auth_files.go down to its core handlers, so the fork's
+#     provider OAuth handlers (kiro, kilo, cursor, github-copilot, gitlab,
+#     gemini-cli) now live in a dedicated fork-owned file.
+internal/api/handlers/management/auth_files_fork_providers.go :: RequestKiroToken
 internal/registry/model_registry.go                        :: SupportedEndpoints
 sdk/cliproxy/service.go                                    :: KiroAuth
 config.example.yaml                                        :: kiro
