@@ -1933,6 +1933,9 @@ func (e *AntigravityExecutor) buildRequest(ctx context.Context, auth *cliproxyau
 		}
 	}
 
+	// The gemini-3-pro clause no longer matches any registered antigravity model
+	// (gemini-3-pro-high/-low are gone from the backend catalog); it is kept because
+	// modelName may be a user-supplied or aliased id that is not in the catalog.
 	useAntigravitySchema := strings.Contains(modelName, "claude") || strings.Contains(modelName, "gemini-3-pro") || strings.Contains(modelName, "gemini-3.1-pro")
 	var (
 		bodyReader io.Reader
