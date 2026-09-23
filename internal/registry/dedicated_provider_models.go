@@ -27,6 +27,7 @@ var openCodeCuratedWindows = map[string]ProviderModelLimit{
 	"claude-haiku-4-5":  {ContextLength: 200000, MaxCompletionTokens: 8000},
 	// Gemini family (1M context)
 	"gemini-3.6-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
+	"gemini-3.8-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
 	"gemini-3.7-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
 	"gemini-3.5-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
 	"gemini-3.5-flash-lite": {ContextLength: 1048576, MaxCompletionTokens: 65536},
