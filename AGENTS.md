@@ -118,4 +118,13 @@ This repo (`arrrrny/CLIProxyAPIPlus`) is a **fork** of `router-for-me/CLIProxyAP
 - **Never push a merged tree that fails `go build ./...`.**
 - The `-X theirs` sync is banned outright. `.github/workflows/sync-and-release.yml` implemented it and has been deleted — do not reintroduce it. `sync-upstream.yml` is the source of truth.
 
+## Pull Request Policy (MANDATORY)
+
+**ALL pull requests MUST target THIS FORK (`arrrrny/CLIProxyAPIPlus`) ONLY.**
+
+- **NEVER open pull requests to upstream (`router-for-me/CLIProxyAPI`).** This is an absolute rule with no exceptions.
+- When creating PRs, ALWAYS use `--repo arrrrny/CLIProxyAPIPlus` or ensure the PR targets the fork.
+- If you accidentally create an upstream PR, close it immediately.
+- Work stays on the fork. The owner decides when and how to contribute to upstream.
+
 **Note:** `AGENTS.md` cannot be changed by a pull request — `agents-md-guard.yml` auto-closes any PR that touches it. Edit it via a direct push to `sync`, as done here.
