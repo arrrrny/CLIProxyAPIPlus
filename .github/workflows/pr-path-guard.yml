@@ -1,11 +1,19 @@
 name: translator-path-guard
 
+# AGENTS.md allows changes under internal/translator/ when the actor has WRITE,
+# MAINTAIN, or ADMIN on the repository, and requires filing an issue otherwise.
+# This guard enforces that rule: it fails for outside contributors and passes
+# for maintainers, instead of blocking every translator change unconditionally.
 on:
   pull_request:
     types:
       - opened
       - synchronize
       - reopened
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   ensure-no-translator-changes:
@@ -20,9 +28,24 @@ jobs:
         with:
           files: |
             internal/translator/**
-      - name: Fail when restricted paths change
+      - name: Check PR author permission
+        id: permission
         if: steps.changed-files.outputs.any_changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          echo "Changes under internal/translator are not allowed in pull requests."
+          set -euo pipefail
+          PERMISSION="$(gh api "repos/${REPO}/collaborators/${AUTHOR}/permission" --jq '.permission')"
+          echo "PR author ${AUTHOR} has permission: ${PERMISSION}"
+          case "${PERMISSION}" in
+            admin|maintain|write) echo "allowed=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "allowed=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Fail when restricted paths change without maintainer permission
+        if: steps.changed-files.outputs.any_changed == 'true' && steps.permission.outputs.allowed != 'true'
+        run: |
+          echo "Changes under internal/translator are not allowed in pull requests from actors without write access."
           echo "You need to create an issue for our maintenance team to make the necessary changes."
           exit 1

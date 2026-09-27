@@ -122,6 +122,69 @@ func TestConvertOpenAIRequestToAntigravityPreservesReasoningBeforeVisibleContent
 	}
 }
 
+func TestConvertOpenAIRequestToAntigravityDropsReasoningForClaudeModels(t *testing.T) {
+	inputJSON := `{
+		"model": "claude-sonnet-4-6",
+		"messages": [
+			{"role": "user", "content": "hi"},
+			{"role": "assistant", "content": "visible answer", "reasoning_content": "thinking only", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
+			{"role": "tool", "tool_call_id": "call_1", "content": "{\"output\":\"ok\"}"},
+			{"role": "user", "content": "say ok"}
+		]
+	}`
+
+	result := ConvertOpenAIRequestToAntigravity("claude-sonnet-4-6", []byte(inputJSON), true)
+	contents := gjson.GetBytes(result, "request.contents").Array()
+	if len(contents) != 4 {
+		t.Fatalf("contents length = %d, want 4. Output: %s", len(contents), result)
+	}
+
+	parts := contents[1].Get("parts").Array()
+	if len(parts) != 2 {
+		t.Fatalf("model parts length = %d, want 2 (reasoning dropped). Output: %s", len(parts), result)
+	}
+	if got := parts[0].Get("text").String(); got != "visible answer" || parts[0].Get("thought").Bool() {
+		t.Fatalf("first part should be visible assistant content. Output: %s", result)
+	}
+	if got := parts[1].Get("functionCall.name").String(); got != "read_file" {
+		t.Fatalf("functionCall.name = %q, want read_file. Output: %s", got, result)
+	}
+
+	// Anthropic rejects the Gemini bypass sentinel on thinking blocks, so no part in
+	// a Claude-bound request may be marked as a thought.
+	gjson.ParseBytes(result).Get("request.contents").ForEach(func(_, content gjson.Result) bool {
+		content.Get("parts").ForEach(func(_, part gjson.Result) bool {
+			if part.Get("thought").Bool() {
+				t.Errorf("Claude request contains a thought part: %s", part.Raw)
+			}
+			return true
+		})
+		return true
+	})
+}
+
+func TestConvertOpenAIRequestToAntigravityDropsReasoningOnlyTurnForClaudeModels(t *testing.T) {
+	inputJSON := `{
+		"model": "claude-opus-4-6",
+		"messages": [
+			{"role": "user", "content": "hi"},
+			{"role": "assistant", "content": "", "reasoning_content": "thinking only"},
+			{"role": "user", "content": "say ok"}
+		]
+	}`
+
+	result := ConvertOpenAIRequestToAntigravity("claude-opus-4-6", []byte(inputJSON), true)
+	contents := gjson.GetBytes(result, "request.contents").Array()
+	if len(contents) != 2 {
+		t.Fatalf("contents length = %d, want 2 (reasoning-only model turn dropped). Output: %s", len(contents), result)
+	}
+	for _, content := range contents {
+		if content.Get("role").String() == "model" {
+			t.Fatalf("reasoning-only model turn should be dropped. Output: %s", result)
+		}
+	}
+}
+
 func TestConvertOpenAIRequestToAntigravitySkipsEmptyAssistantMessages(t *testing.T) {
 	inputJSON := `{
 		"model": "gemini-3-flash",
