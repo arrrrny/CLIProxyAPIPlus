@@ -5,6 +5,7 @@ package chat_completions
 import (
 	"strings"
 
+	sigcompat "github.com/router-for-me/CLIProxyAPI/v7/internal/signature"
 	translatorcommon "github.com/router-for-me/CLIProxyAPI/v7/internal/translator/common"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/translator/gemini/common"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
@@ -206,10 +207,20 @@ func ConvertOpenAIRequestToAntigravity(modelName string, inputRawJSON []byte, _ 
 			} else if role == "assistant" {
 				partItems := make([][]byte, 0, 4)
 				if reasoningContent := m.Get("reasoning_content"); reasoningContent.Type == gjson.String && reasoningContent.String() != "" {
-					part := antigravityOpenAITextPart(reasoningContent.String())
-					part, _ = sjson.SetBytes(part, "thought", true)
-					part, _ = sjson.SetBytes(part, "thoughtSignature", antigravityFunctionThoughtSignature)
-					partItems = append(partItems, part)
+					// Antigravity Claude validates thinking signatures, so the Gemini bypass
+					// sentinel is rejected with "Invalid `signature` in `thinking` block". The
+					// OpenAI chat-completions response path never returns a real signature to
+					// the client, so a replayed reasoning block cannot be made replay-safe here
+					// and is dropped instead. The OpenAI Responses path round-trips the
+					// signature via encrypted_content and keeps the block.
+					if sigcompat.SignatureProviderFromModelName(modelName) == sigcompat.SignatureProviderClaude {
+						logDroppedAntigravityClaudeReasoning(modelName, i, reasoningContent.String())
+					} else {
+						part := antigravityOpenAITextPart(reasoningContent.String())
+						part, _ = sjson.SetBytes(part, "thought", true)
+						part, _ = sjson.SetBytes(part, "thoughtSignature", antigravityFunctionThoughtSignature)
+						partItems = append(partItems, part)
+					}
 				}
 				if content.Type == gjson.String && content.String() != "" {
 					partItems = append(partItems, antigravityOpenAITextPart(content.String()))
@@ -562,4 +573,17 @@ func normalizeAntigravityOpenAIThinkingConfig(out []byte) []byte {
 func antigravityOpenAIDefaultIncludeThoughts(modelName string) bool {
 	modelName = strings.ToLower(modelName)
 	return strings.Contains(modelName, "gemini-3")
+}
+
+func logDroppedAntigravityClaudeReasoning(modelName string, messageIndex int, reasoning string) {
+	log.WithFields(log.Fields{
+		"component":       "signature_sanitizer",
+		"translator":      "antigravity_openai_chat_completions",
+		"target_provider": string(sigcompat.SignatureProviderClaude),
+		"action":          "drop_thinking_block",
+		"reason":          "missing_or_incompatible_signature",
+		"model":           modelName,
+		"message_index":   messageIndex,
+		"reasoning_bytes": len(reasoning),
+	}).Debug("antigravity chat completions translator: dropped replayed Claude reasoning block because the OpenAI wire format carries no thinking signature")
 }
