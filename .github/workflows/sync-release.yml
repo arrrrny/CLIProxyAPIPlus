@@ -2,7 +2,18 @@ name: sync-release
 
 # Replaces the removed sync-and-release.yml. Builds release binaries for
 # linux/amd64 and darwin/amd64 (Intel Mac) on every push to the `sync` branch
-# and publishes them as a GitHub release.
+# and publishes them as a GitHub **prerelease**.
+#
+# These are CI smoke-builds, not product releases: the tag-driven
+# release.yaml workflow is the only path that publishes a real version, and it
+# is the one clients must see as "latest". Publishing this as a prerelease
+# keeps it out of the latest-release pointer, otherwise every push to `sync`
+# would shadow the real tagged release for clients that poll
+# /releases/latest or releases.atom.
+#
+# To ship a version: merge to `sync`, then push an annotated tag (for example
+# `git tag -a v7.5.9 -m "chore(release): v7.5.9"` and `git push origin v7.5.9`).
+# release.yaml derives the version from the tag name.
 
 on:
   push:
@@ -53,7 +64,7 @@ jobs:
           ASSET_ARCH: ${{ matrix.asset_arch }}
         run: |
           set -euo pipefail
-          RELEASE_VERSION="7.5.6"
+          RELEASE_VERSION="sync-$(git rev-parse --short HEAD)"
           COMMIT="$(git rev-parse --short HEAD)"
           BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           mkdir -p dist/archive
@@ -82,13 +93,16 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Create release
+      - name: Create prerelease
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="v7.5.5-$(git rev-parse --short HEAD)"
+          TAG="sync-$(git rev-parse --short HEAD)"
+          # --prerelease keeps this build out of the latest-release pointer so it
+          # cannot shadow the real tagged release that clients poll for.
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
-            --title "CLIProxyAPI 7.5.5 (sync)" \
-            --notes "Automated build from the \`sync\` branch (linux/amd64 + darwin/amd64)."
+            --title "CLIProxyAPI sync build $(git rev-parse --short HEAD)" \
+            --prerelease \
+            --notes "Automated CI smoke-build from the \`sync\` branch (linux/amd64 + darwin/amd64). Not a product release. Product versions are published by release.yaml from a pushed tag."
           gh release upload "$TAG" dist/CLIProxyAPI_*.tar.gz --clobber
