@@ -339,6 +339,11 @@ type RemoteManagement struct {
 	// PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.
 	// Accepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.
 	PanelGitHubRepository string `yaml:"panel-github-repository"`
+	// PanelRelease pins the management panel to a specific release tag instead of
+	// always taking the latest. Use this when the newest panel requires a newer
+	// management API than this build serves: panel v1.25.0 and later demand a v8
+	// backend, while v1.24.x works against a v0-only one.
+	PanelRelease string `yaml:"panel-release,omitempty"`
 }
 
 // QuotaExceeded defines the behavior when API quota limits are exceeded.

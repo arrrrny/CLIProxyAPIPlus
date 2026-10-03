@@ -69,8 +69,11 @@ type SDKConfig struct {
 	// "opencode", "opencode-go", "openrouter", "z-ai", "kilo"); a value of true
 	// publishes that provider's models, false (or an absent key) hides them.
 	// When the map is empty or unset, every provider is published (legacy behavior).
-	// This only affects /api.json generation — it does not change request routing or
-	// the /v1/models response; connected providers keep working as before.
+	//
+	// The allowlist also bounds request routing: a provider that is not published
+	// cannot be dispatched to, so a model the catalog never advertised cannot be
+	// used to spend a subscription the operator excluded. Models resolve to their
+	// remaining providers, or to "unknown provider" when none survive.
 	PropagateInAPI map[string]bool `yaml:"propagate_in_api" json:"propagate_in_api"`
 }
 

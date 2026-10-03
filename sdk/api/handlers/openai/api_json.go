@@ -11,8 +11,10 @@ import (
 // the registry's context_length / max_completion_tokens, so downstream consumers
 // (e.g. Quotio's ProxyBridge) read correct limits by construction.
 // Provider visibility is governed by the config.propagate_in_api allowlist: only
-// providers mapped to true are published. An empty/unset allowlist publishes every
-// provider (legacy behavior). This never changes request routing or /v1/models.
+// providers mapped to true are published, and the same allowlist bounds which
+// providers a request may be dispatched to (see util.FilterProvidersByPropagation).
+// An empty/unset allowlist publishes every provider and routes to every provider
+// (legacy behavior).
 func (h *OpenAIAPIHandler) APIJSON(c *gin.Context) {
 	models := h.Models()
 	if h.Cfg != nil && len(h.Cfg.PropagateInAPI) > 0 {

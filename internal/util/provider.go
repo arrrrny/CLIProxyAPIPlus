@@ -79,6 +79,42 @@ func GetProviderName(modelName string) []string {
 	return providers
 }
 
+// FilterProvidersByPropagation drops providers that config.propagate_in_api does
+// not publish, so the allowlist that shapes /api.json also bounds which
+// credentials a request may be dispatched to. Without this a client can name a
+// model that the catalog never advertised and still be routed to whichever
+// provider owns it, silently spending a subscription the operator excluded.
+//
+// An empty or unset allowlist leaves providers untouched (legacy behavior).
+// Comparison is case-insensitive. The returned slice preserves the input order,
+// which encodes provider preference.
+func FilterProvidersByPropagation(providers []string, allowlist map[string]bool) []string {
+	if len(providers) == 0 || len(allowlist) == 0 {
+		return providers
+	}
+
+	allowed := make(map[string]struct{}, len(allowlist))
+	for provider, on := range allowlist {
+		if !on {
+			continue
+		}
+		if key := strings.ToLower(strings.TrimSpace(provider)); key != "" {
+			allowed[key] = struct{}{}
+		}
+	}
+	if len(allowed) == 0 {
+		return providers
+	}
+
+	out := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		if _, ok := allowed[strings.ToLower(strings.TrimSpace(provider))]; ok {
+			out = append(out, provider)
+		}
+	}
+	return out
+}
+
 // ResolveAutoModel resolves the "auto" model name to an actual available model.
 // It uses an empty handler type to get any available model from the registry.
 //

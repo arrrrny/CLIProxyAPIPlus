@@ -308,7 +308,7 @@ func (h *OpenAIResponsesAPIHandler) ResponsesWebsocket(c *gin.Context) {
 		}
 		pinnedAuthID = authID
 		providerKey := strings.ToLower(strings.TrimSpace(auth.Provider))
-		_, modelKey := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(modelName))
+		_, modelKey := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(modelName), responsesWebsocketPropagateAllowlist(h))
 		if providerKey != "" {
 			pinnedAuthByProvider[providerKey] = responsesWebsocketPinnedAuthState{authID: authID, modelKey: modelKey}
 		}
@@ -362,17 +362,17 @@ func (h *OpenAIResponsesAPIHandler) ResponsesWebsocket(c *gin.Context) {
 				providerKey = strings.ToLower(strings.TrimSpace(pinnedAuth.Provider))
 			}
 			state, hasState := pinnedAuthByProvider[providerKey]
-			if !ok || !hasState || state.authID != pinnedAuthID || !responsesWebsocketPinnedAuthMatchesModel(pinnedAuth, requestModelName, state.modelKey, homeRuntime) {
+			if !ok || !hasState || state.authID != pinnedAuthID || !responsesWebsocketPinnedAuthMatchesModel(pinnedAuth, requestModelName, state.modelKey, homeRuntime, responsesWebsocketPropagateAllowlist(h)) {
 				pinnedAuthID = ""
 			}
 		}
 		if pinnedAuthID == "" {
-			providerSet, _ := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(requestModelName))
+			providerSet, _ := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(requestModelName), responsesWebsocketPropagateAllowlist(h))
 			if len(providerSet) == 1 {
 				for providerKey := range providerSet {
 					state, ok := pinnedAuthByProvider[providerKey]
 					candidateAuth, homeRuntime, okAuth := sessionAuthByIDWithSource(state.authID)
-					if ok && okAuth && responsesWebsocketPinnedAuthMatchesModel(candidateAuth, requestModelName, state.modelKey, homeRuntime) {
+					if ok && okAuth && responsesWebsocketPinnedAuthMatchesModel(candidateAuth, requestModelName, state.modelKey, homeRuntime, responsesWebsocketPropagateAllowlist(h)) {
 						pinnedAuthID = state.authID
 					} else {
 						delete(pinnedAuthByProvider, providerKey)
@@ -1077,7 +1077,7 @@ func (h *OpenAIResponsesAPIHandler) responsesWebsocketAvailableAuthsForModel(mod
 		return nil, ""
 	}
 	resolvedModelName := responsesWebsocketResolvedModelName(modelName)
-	providerSet, modelKey := responsesWebsocketProviderSetForModel(resolvedModelName)
+	providerSet, modelKey := responsesWebsocketProviderSetForModel(resolvedModelName, responsesWebsocketPropagateAllowlist(h))
 	if len(providerSet) == 0 {
 		return nil, modelKey
 	}
@@ -1139,11 +1139,11 @@ func responsesWebsocketAuthSupportsIncrementalInput(auth *coreauth.Auth) bool {
 	return websocketUpstreamSupportsIncrementalInput(auth.Attributes, auth.Metadata)
 }
 
-func responsesWebsocketPinnedAuthMatchesModel(auth *coreauth.Auth, modelName string, pinnedModelKey string, homeRuntime bool) bool {
+func responsesWebsocketPinnedAuthMatchesModel(auth *coreauth.Auth, modelName string, pinnedModelKey string, homeRuntime bool, propagateAllowlist map[string]bool) bool {
 	if auth == nil {
 		return false
 	}
-	providerSet, modelKey := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(modelName))
+	providerSet, modelKey := responsesWebsocketProviderSetForModel(responsesWebsocketResolvedModelName(modelName), propagateAllowlist)
 	providerKey := strings.ToLower(strings.TrimSpace(auth.Provider))
 	if _, ok := providerSet[providerKey]; !ok {
 		return false
@@ -1203,13 +1203,23 @@ func responsesWebsocketResolvedModelName(modelName string) string {
 	return util.ResolveAutoModel(modelName)
 }
 
-func responsesWebsocketProviderSetForModel(resolvedModelName string) (map[string]struct{}, string) {
+// responsesWebsocketPropagateAllowlist returns the config.propagate_in_api
+// allowlist so websocket dispatch honors the same provider bound as HTTP.
+func responsesWebsocketPropagateAllowlist(h *OpenAIResponsesAPIHandler) map[string]bool {
+	if h == nil || h.Cfg == nil {
+		return nil
+	}
+	return h.Cfg.PropagateInAPI
+}
+
+func responsesWebsocketProviderSetForModel(resolvedModelName string, propagateAllowlist map[string]bool) (map[string]struct{}, string) {
 	parsed := thinking.ParseSuffix(resolvedModelName)
 	baseModel := strings.TrimSpace(parsed.ModelName)
 	providers := util.GetProviderName(baseModel)
 	if len(providers) == 0 && baseModel != resolvedModelName {
 		providers = util.GetProviderName(resolvedModelName)
 	}
+	providers = util.FilterProvidersByPropagation(providers, propagateAllowlist)
 	providerSet := make(map[string]struct{}, len(providers))
 	for _, provider := range providers {
 		providerKey := strings.TrimSpace(strings.ToLower(provider))

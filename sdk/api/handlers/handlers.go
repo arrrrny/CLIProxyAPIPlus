@@ -1688,6 +1688,12 @@ func (h *BaseAPIHandler) getRequestDetailsWithOptions(modelName string, allowIma
 		providers = util.GetProviderName(resolvedModelName)
 	}
 
+	// config.propagate_in_api also bounds dispatch, so a model the catalog never
+	// advertised cannot be used to reach a provider the operator excluded.
+	if h != nil && h.Cfg != nil {
+		providers = util.FilterProvidersByPropagation(providers, h.Cfg.PropagateInAPI)
+	}
+
 	if len(providers) == 0 {
 		return nil, "", &interfaces.ErrorMessage{StatusCode: http.StatusBadGateway, Error: fmt.Errorf("unknown provider for model %s", modelName)}
 	}

@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	defaultManagementReleaseURL  = "https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest"
+	defaultPanelOwner            = "router-for-me"
+	defaultPanelName             = "Cli-Proxy-API-Management-Center"
+	defaultManagementReleaseURL  = "https://api.github.com/repos/" + defaultPanelOwner + "/" + defaultPanelName + "/releases/latest"
 	defaultManagementFallbackURL = "https://cpamc.router-for.me/"
 	managementAssetName          = "management.html"
 	httpUserAgent                = "CLIProxyAPI-management-updater"
@@ -89,7 +91,7 @@ func runAutoUpdater(ctx context.Context) {
 
 		configPath, _ := schedulerConfigPath.Load().(string)
 		staticDir := StaticDir(configPath)
-		EnsureLatestManagementHTML(ctx, staticDir, cfg.ProxyURL, cfg.RemoteManagement.PanelGitHubRepository)
+		EnsureLatestManagementHTML(ctx, staticDir, cfg.ProxyURL, cfg.RemoteManagement.PanelGitHubRepository, cfg.RemoteManagement.PanelRelease)
 	}
 
 	runOnce()
@@ -188,7 +190,7 @@ func FilePath(configFilePath string) string {
 
 // EnsureLatestManagementHTML checks the latest management.html asset and updates the local copy when needed.
 // It coalesces concurrent sync attempts and returns whether the asset exists after the sync attempt.
-func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL string, panelRepository string) bool {
+func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL string, panelRepository string, panelRelease string) bool {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -230,7 +232,7 @@ func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL 
 			return nil, nil
 		}
 
-		releaseURL := resolveReleaseURL(panelRepository)
+		releaseURL := resolveReleaseTagURL(panelRepository, panelRelease)
 		client := newHTTPClient(proxyURL)
 
 		localHash, err := fileSHA256(localPath)
@@ -339,6 +341,59 @@ func resolveReleaseURL(repo string) string {
 	}
 
 	return defaultManagementReleaseURL
+}
+
+// resolveReleaseTagURL builds the API URL for a specific release tag of the panel
+// repository, so an operator can pin the panel to a build that matches their
+// backend's management API version. An empty tag falls back to the latest release.
+//
+// The repository is normalized to owner/name first, so a pin is never silently
+// dropped: an unset repository, the built-in default, and an unrecognized host
+// all still resolve to the default panel repository with the requested tag.
+func resolveReleaseTagURL(repo, tag string) string {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return resolveReleaseURL(repo)
+	}
+
+	owner, name := panelRepoOwnerAndName(repo)
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, name, url.PathEscape(tag))
+}
+
+// panelRepoOwnerAndName extracts owner and repository name from a GitHub URL,
+// an API releases endpoint, or a bare "owner/name" pair. It falls back to the
+// default panel repository when the input cannot be interpreted.
+func panelRepoOwnerAndName(repo string) (owner, name string) {
+	repo = strings.TrimSpace(repo)
+	if repo == "" {
+		repo = defaultManagementReleaseURL
+	}
+
+	parsed, errParse := url.Parse(repo)
+	if errParse != nil || parsed.Host == "" {
+		// Allow a bare "owner/name" pair.
+		if parts := strings.Split(strings.Trim(repo, "/"), "/"); len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+			return parts[0], strings.TrimSuffix(parts[1], ".git")
+		}
+		return defaultPanelOwner, defaultPanelName
+	}
+
+	host := strings.ToLower(parsed.Host)
+	if host != "github.com" && host != "api.github.com" && host != "www.github.com" {
+		return defaultPanelOwner, defaultPanelName
+	}
+
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	// Accept github.com/<owner>/<repo>... and api.github.com/repos/<owner>/<repo>...
+	for i := 0; i+1 < len(parts); i++ {
+		if parts[i] == "repos" && parts[i+1] != "" && i+2 < len(parts) && parts[i+2] != "" {
+			return parts[i+1], strings.TrimSuffix(parts[i+2], ".git")
+		}
+	}
+	if len(parts) >= 2 && parts[0] != "" && parts[1] != "" && parts[0] != "repos" {
+		return parts[0], strings.TrimSuffix(parts[1], ".git")
+	}
+	return defaultPanelOwner, defaultPanelName
 }
 
 func fetchLatestAsset(ctx context.Context, client *http.Client, releaseURL string) (*releaseAsset, string, error) {
