@@ -75,71 +75,171 @@ func GetKimiModels() []*ModelInfo {
 	return cloneModelInfos(getModels().Kimi)
 }
 
+// antigravityLocalModels are Antigravity models this build keeps in the catalog
+// no matter what the shared registry (router-for-me/models) publishes.
+//
+// The registry omits models that Antigravity does serve, which strands requests
+// for them with "unknown provider for model". Every entry below was confirmed
+// present in v1internal:fetchAvailableModels for all 11 Antigravity accounts and
+// answering 200 on v1internal:generateContent, so they are reinstated here.
+//
+// The Claude pair is also the floor of the Claude line on this provider:
+// Antigravity publishes no successor to them.
+var antigravityLocalModels = []*ModelInfo{
+	{
+		ID:                  "claude-opus-4-6-thinking",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Claude Opus 4.6 (Thinking)",
+		ContextLength:       200000,
+		MaxCompletionTokens: 64000,
+		Thinking: &ThinkingSupport{
+			Min:            1024,
+			Max:            64000,
+			ZeroAllowed:    true,
+			DynamicAllowed: true,
+		},
+	},
+	{
+		ID:                  "claude-sonnet-4-6",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Claude Sonnet 4.6 (Thinking)",
+		ContextLength:       200000,
+		MaxCompletionTokens: 64000,
+		Thinking: &ThinkingSupport{
+			Min:            1024,
+			Max:            64000,
+			ZeroAllowed:    true,
+			DynamicAllowed: true,
+		},
+	},
+	{
+		ID:                  "gemini-3-flash-agent",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Gemini 3.5 Flash (High)",
+		ContextLength:       1048576,
+		MaxCompletionTokens: 65536,
+		Thinking: &ThinkingSupport{
+			Min:            128,
+			Max:            32768,
+			DynamicAllowed: true,
+			Levels:         []string{"minimal", "low", "medium", "high"},
+		},
+	},
+	{
+		ID:                  "gemini-3.5-flash-extra-low",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Gemini 3.5 Flash (Low)",
+		ContextLength:       1048576,
+		MaxCompletionTokens: 65535,
+		Thinking: &ThinkingSupport{
+			Min:            1,
+			Max:            65535,
+			DynamicAllowed: true,
+			Levels:         []string{"low", "medium", "high"},
+		},
+	},
+	{
+		ID:                  "gemini-3.5-flash-low",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Gemini 3.5 Flash (Medium)",
+		ContextLength:       1048576,
+		MaxCompletionTokens: 65535,
+		Thinking: &ThinkingSupport{
+			Min:            1,
+			Max:            65535,
+			DynamicAllowed: true,
+			Levels:         []string{"low", "medium", "high"},
+		},
+	},
+}
+
+// antigravityFlashTierModels are the per-tier Gemini 3.6/3.7/3.8 Flash variants.
+// Antigravity ships them alongside each family's -high entry and lists them in
+// tieredModelIds; only the -high member of each family reaches the shared
+// registry. They are generated from a shared template because the families are
+// identical apart from version and tier.
+func antigravityFlashTierModels() []*ModelInfo {
+	tiers := []struct {
+		suffix      string
+		displayTier string
+	}{
+		{"low", "Low"},
+		{"medium", "Medium"},
+		{"tiered", "Tiered"},
+	}
+	versions := []string{"3.6", "3.7", "3.8"}
+
+	models := make([]*ModelInfo, 0, len(versions)*len(tiers))
+	for _, version := range versions {
+		for _, tier := range tiers {
+			models = append(models, &ModelInfo{
+				ID:                  "gemini-" + version + "-flash-" + tier.suffix,
+				Object:              "model",
+				OwnedBy:             "antigravity",
+				Type:                "antigravity",
+				DisplayName:         "Gemini " + version + " Flash (" + tier.displayTier + ")",
+				ContextLength:       1048576,
+				MaxCompletionTokens: 65536,
+				Thinking: &ThinkingSupport{
+					Min:            1,
+					Max:            65535,
+					DynamicAllowed: true,
+					Levels:         []string{"minimal", "low", "medium", "high"},
+				},
+				SupportedInputModalities:  []string{"text", "image", "audio", "video"},
+				SupportedOutputModalities: []string{"text"},
+			})
+		}
+	}
+	return models
+}
+
+// antigravityUnsupportedModelIDs are catalog entries no Antigravity account can
+// execute. The shared registry advertises them, so without this filter they are
+// published through /v1/models and the models.dev catalog while every request
+// against them fails upstream.
+//
+// Verified 2026-10-03 against Antigravity Hub 2.19.1, including a Google AI
+// subscription account: v1internal:fetchAvailableModels lists 33 models whose
+// only Claude entries are claude-opus-4-6-thinking and claude-sonnet-4-6 (on
+// cloudcode-pa, daily-cloudcode-pa and the daily sandbox alike), and
+// v1internal:generateContent answers 404 NOT_FOUND for the IDs below while the
+// two IDs above return 200. Remove an entry once the upstream catalog serves it.
+var antigravityUnsupportedModelIDs = map[string]struct{}{
+	"claude-opus-5-5-high":   {},
+	"claude-sonnet-5-5-high": {},
+}
+
+// antigravityExcludedModelIDs are models this build deliberately does not
+// publish. They are served upstream, so this is an operator preference rather
+// than a capability gap; keep the two lists separate so the distinction stays
+// obvious when the catalog is next revisited.
+var antigravityExcludedModelIDs = map[string]struct{}{
+	"gemini-2.5-flash":          {},
+	"gemini-2.5-flash-lite":     {},
+	"gemini-2.5-flash-thinking": {},
+	"gemini-2.5-pro":            {},
+}
+
 // GetAntigravityModels returns the standard Antigravity model definitions.
 func GetAntigravityModels() []*ModelInfo {
 	models := cloneModelInfos(getModels().Antigravity)
+	models = dropModelInfos(models, antigravityUnsupportedModelIDs)
+	models = dropModelInfos(models, antigravityExcludedModelIDs)
 
-	// Add Gemini 2.5 models if not already in the catalog
-	models = upsertModelInfos(models,
-		&ModelInfo{
-			ID:                  "gemini-2.5-flash-thinking",
-			Object:              "model",
-			OwnedBy:             "antigravity",
-			Type:                "antigravity",
-			DisplayName:         "Gemini 2.5 Flash Thinking",
-			ContextLength:       1048576,
-			MaxCompletionTokens: 65536,
-			Thinking: &ThinkingSupport{
-				Min:            1,
-				Max:            65535,
-				ZeroAllowed:    true,
-				DynamicAllowed: true,
-				Levels:         []string{"minimal", "low", "medium", "high"},
-			},
-		},
-		&ModelInfo{
-			ID:                  "gemini-2.5-flash-lite",
-			Object:              "model",
-			OwnedBy:             "antigravity",
-			Type:                "antigravity",
-			DisplayName:         "Gemini 2.5 Flash Lite",
-			ContextLength:       1048576,
-			MaxCompletionTokens: 65536,
-			Thinking: &ThinkingSupport{
-				Max:            24576,
-				ZeroAllowed:    true,
-				DynamicAllowed: true,
-			},
-		},
-		&ModelInfo{
-			ID:                  "gemini-2.5-flash",
-			Object:              "model",
-			OwnedBy:             "antigravity",
-			Type:                "antigravity",
-			DisplayName:         "Gemini 2.5 Flash",
-			ContextLength:       1048576,
-			MaxCompletionTokens: 65536,
-			Thinking: &ThinkingSupport{
-				Max:            24576,
-				ZeroAllowed:    true,
-				DynamicAllowed: true,
-			},
-		},
-		&ModelInfo{
-			ID:                  "gemini-2.5-pro",
-			Object:              "model",
-			OwnedBy:             "antigravity",
-			Type:                "antigravity",
-			DisplayName:         "Gemini 2.5 Pro",
-			ContextLength:       1048576,
-			MaxCompletionTokens: 65536,
-			Thinking: &ThinkingSupport{
-				Min:            128,
-				Max:            32768,
-				DynamicAllowed: true,
-			},
-		},
-	)
+	// Reinstates the Antigravity models the shared registry omits.
+	models = upsertModelInfos(models, antigravityLocalModels...)
+	models = upsertModelInfos(models, antigravityFlashTierModels()...)
 
 	return models
 }
@@ -446,6 +546,32 @@ func upsertModelInfos(models []*ModelInfo, extras ...*ModelInfo) []*ModelInfo {
 	return filtered
 }
 
+// dropModelInfos returns models with the IDs in exclude removed. Comparison is
+// case-insensitive and whitespace-trimmed, matching upsertModelInfos. A nil or
+// empty exclude set returns models unchanged.
+func dropModelInfos(models []*ModelInfo, exclude map[string]struct{}) []*ModelInfo {
+	if len(models) == 0 || len(exclude) == 0 {
+		return models
+	}
+
+	filtered := make([]*ModelInfo, 0, len(models))
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+		id := strings.TrimSpace(model.ID)
+		if id == "" {
+			continue
+		}
+		if _, drop := exclude[strings.ToLower(id)]; drop {
+			continue
+		}
+		filtered = append(filtered, model)
+	}
+
+	return filtered
+}
+
 // cloneModelInfos returns a shallow copy of the slice with each element deep-cloned.
 func cloneModelInfos(models []*ModelInfo) []*ModelInfo {
 	if len(models) == 0 {
@@ -538,7 +664,7 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 		data.AIStudio,
 		data.CodexPro,
 		data.Kimi,
-		data.Antigravity,
+		GetAntigravityModels(),
 		data.XAI,
 		GetGitHubCopilotModels(),
 		GetKiroModels(),

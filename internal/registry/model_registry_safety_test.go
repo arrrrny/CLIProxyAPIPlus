@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -173,5 +174,156 @@ func TestLookupModelInfoIncludesClaudeSonnet5(t *testing.T) {
 		if model.Thinking.Levels[i] != level {
 			t.Fatalf("Claude Sonnet 5 thinking levels = %+v, want %+v", model.Thinking.Levels, expectedLevels)
 		}
+	}
+}
+
+// The shared registry (router-for-me/models) omits models Antigravity does serve
+// and advertises claude-opus-5-5-high / claude-sonnet-5-5-high, which no
+// Antigravity account can execute. A periodic refresh used to therefore strand
+// requests for those models with "unknown provider for model". These tests pin
+// the overrides that keep the catalog honest regardless of what is fetched.
+func TestAntigravityCatalogSurvivesRegistryRefresh(t *testing.T) {
+	// What the shared registry actually publishes today.
+	registry := []*ModelInfo{
+		{ID: "claude-opus-5-5-high", OwnedBy: "antigravity", Type: "antigravity"},
+		{ID: "claude-sonnet-5-5-high", OwnedBy: "antigravity", Type: "antigravity"},
+		{ID: "gemini-3.8-flash-high", OwnedBy: "antigravity", Type: "antigravity"},
+		{ID: "gemini-pro-agent", OwnedBy: "antigravity", Type: "antigravity"},
+	}
+
+	got := make(map[string]bool)
+	rebuilt := upsertModelInfos(dropModelInfos(registry, antigravityUnsupportedModelIDs), antigravityLocalModels...)
+	for _, model := range upsertModelInfos(rebuilt, antigravityFlashTierModels()...) {
+		got[model.ID] = true
+	}
+
+	// Served upstream, dropped by the registry: must be reinstated.
+	for _, model := range append(append([]*ModelInfo{}, antigravityLocalModels...), antigravityFlashTierModels()...) {
+		if !got[model.ID] {
+			t.Errorf("Antigravity model %q is served upstream and must survive a registry refresh", model.ID)
+		}
+	}
+	for _, id := range []string{"claude-opus-5-5-high", "claude-sonnet-5-5-high"} {
+		if got[id] {
+			t.Errorf("Antigravity model %q is not served upstream and must not be advertised", id)
+		}
+	}
+	for _, id := range []string{"gemini-3.8-flash-high", "gemini-pro-agent"} {
+		if !got[id] {
+			t.Errorf("registry model %q must be left alone", id)
+		}
+	}
+}
+
+func TestAntigravityFlashTierModelsAreWellFormed(t *testing.T) {
+	tiers := antigravityFlashTierModels()
+	if len(tiers) != 9 {
+		t.Fatalf("expected 3 versions x 3 tiers, got %d", len(tiers))
+	}
+
+	seen := make(map[string]bool, len(tiers))
+	for _, model := range tiers {
+		if seen[model.ID] {
+			t.Errorf("duplicate generated model id %q", model.ID)
+		}
+		seen[model.ID] = true
+
+		if !strings.HasPrefix(model.ID, "gemini-3.") || !strings.HasSuffix(model.ID, "-flash-tiered") &&
+			!strings.HasSuffix(model.ID, "-flash-low") && !strings.HasSuffix(model.ID, "-flash-medium") {
+			t.Errorf("unexpected generated id %q", model.ID)
+		}
+		if model.OwnedBy != "antigravity" || model.Type != "antigravity" {
+			t.Errorf("%q generated as %s/%s, want antigravity/antigravity", model.ID, model.OwnedBy, model.Type)
+		}
+		if !strings.Contains(model.DisplayName, "(") {
+			t.Errorf("%q needs a tier suffix in its display name, got %q", model.ID, model.DisplayName)
+		}
+		if model.Thinking == nil || len(model.Thinking.Levels) == 0 {
+			t.Errorf("%q must advertise thinking levels", model.ID)
+		}
+		if len(model.SupportedInputModalities) == 0 || len(model.SupportedOutputModalities) == 0 {
+			t.Errorf("%q must advertise modalities", model.ID)
+		}
+		if model.ContextLength != 1048576 || model.MaxCompletionTokens != 65536 {
+			t.Errorf("%q has unexpected limits %d/%d", model.ID, model.ContextLength, model.MaxCompletionTokens)
+		}
+	}
+}
+
+// The embedded catalog must already carry every model the overrides reinstate,
+// so a build that never reaches the network is not missing them.
+func TestAntigravityLocalModelsAreEmbedded(t *testing.T) {
+	embedded := make(map[string]bool)
+	for _, model := range getModels().Antigravity {
+		embedded[model.ID] = true
+	}
+
+	for _, model := range append(append([]*ModelInfo{}, antigravityLocalModels...), antigravityFlashTierModels()...) {
+		if !embedded[model.ID] {
+			t.Errorf("%q is missing from the embedded models.json catalog", model.ID)
+		}
+	}
+}
+
+func TestAntigravityLocalModelsAreComplete(t *testing.T) {
+	published := make(map[string]*ModelInfo)
+	for _, model := range GetAntigravityModels() {
+		published[model.ID] = model
+	}
+
+	all := append(append([]*ModelInfo{}, antigravityLocalModels...), antigravityFlashTierModels()...)
+	for _, model := range all {
+		info, ok := published[model.ID]
+		if !ok {
+			t.Errorf("%q missing from the Antigravity catalog", model.ID)
+			continue
+		}
+		if info.OwnedBy != "antigravity" || info.Type != "antigravity" {
+			t.Errorf("%q published as %s/%s, want antigravity/antigravity", model.ID, info.OwnedBy, info.Type)
+		}
+		if info.DisplayName == "" {
+			t.Errorf("%q has no display name", model.ID)
+		}
+		if info.ContextLength <= 0 || info.MaxCompletionTokens <= 0 {
+			t.Errorf("%q has no usable token limits: %+v", model.ID, info)
+		}
+		if info.Thinking == nil {
+			t.Errorf("%q must advertise thinking support", model.ID)
+		}
+	}
+
+	for id := range antigravityUnsupportedModelIDs {
+		if _, ok := published[id]; ok {
+			t.Errorf("%q is not served upstream and must not be published", id)
+		}
+	}
+	for id := range antigravityExcludedModelIDs {
+		if _, ok := published[id]; ok {
+			t.Errorf("%q is excluded by operator preference and must not be published", id)
+		}
+	}
+}
+
+// The Gemini 2.x Antigravity models are intentionally unpublished. Guard against
+// a registry refresh quietly reintroducing them.
+func TestAntigravityExcludedModelsStayExcluded(t *testing.T) {
+	registry := []*ModelInfo{
+		{ID: "gemini-2.5-flash", OwnedBy: "antigravity", Type: "antigravity"},
+		{ID: "gemini-2.5-pro", OwnedBy: "antigravity", Type: "antigravity"},
+		{ID: "gemini-3.8-flash-high", OwnedBy: "antigravity", Type: "antigravity"},
+	}
+
+	got := make(map[string]bool)
+	for _, model := range upsertModelInfos(dropModelInfos(dropModelInfos(registry, antigravityUnsupportedModelIDs), antigravityExcludedModelIDs), antigravityLocalModels...) {
+		got[model.ID] = true
+	}
+
+	for id := range antigravityExcludedModelIDs {
+		if got[id] {
+			t.Errorf("%q must stay excluded after a registry refresh", id)
+		}
+	}
+	if !got["gemini-3.8-flash-high"] {
+		t.Error("filtering must not touch models outside the exclusion lists")
 	}
 }
