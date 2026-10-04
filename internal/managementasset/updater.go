@@ -26,9 +26,22 @@ import (
 )
 
 const (
-	defaultPanelOwner            = "router-for-me"
-	defaultPanelName             = "Cli-Proxy-API-Management-Center"
-	defaultManagementReleaseURL  = "https://api.github.com/repos/" + defaultPanelOwner + "/" + defaultPanelName + "/releases/latest"
+	defaultPanelOwner           = "router-for-me"
+	defaultPanelName            = "Cli-Proxy-API-Management-Center"
+	defaultManagementReleaseURL = "https://api.github.com/repos/" + defaultPanelOwner + "/" + defaultPanelName + "/releases/latest"
+
+	// defaultPanelCompatibleRelease is the newest built-in panel that still works
+	// against a v0-only management backend. Panel v1.25.0 started requiring a v8
+	// backend and refuses to render here ("This backend accepts v0 Management API
+	// but does not provide v8"), so tracking /releases/latest leaves the control
+	// panel broken with no code or config change on our side. Operators can move
+	// forward with remote-management.panel-release once this build serves v8.
+	defaultPanelCompatibleRelease = "v1.24.2"
+
+	// defaultPanelBrowseURL is the human-facing form of the built-in panel
+	// repository, which config loading substitutes for an unset
+	// panel-github-repository.
+	defaultPanelBrowseURL        = "https://github.com/" + defaultPanelOwner + "/" + defaultPanelName
 	defaultManagementFallbackURL = "https://cpamc.router-for.me/"
 	managementAssetName          = "management.html"
 	httpUserAgent                = "CLIProxyAPI-management-updater"
@@ -232,7 +245,7 @@ func EnsureLatestManagementHTML(ctx context.Context, staticDir string, proxyURL 
 			return nil, nil
 		}
 
-		releaseURL := resolveReleaseTagURL(panelRepository, panelRelease)
+		releaseURL := resolveReleaseTagURL(panelRepository, effectivePanelRelease(panelRepository, panelRelease))
 		client := newHTTPClient(proxyURL)
 
 		localHash, err := fileSHA256(localPath)
@@ -341,6 +354,26 @@ func resolveReleaseURL(repo string) string {
 	}
 
 	return defaultManagementReleaseURL
+}
+
+// effectivePanelRelease picks the release tag to fetch. The built-in panel
+// repository is pinned to defaultPanelCompatibleRelease because its v1.25.0+
+// releases require a v8 management backend this build does not serve. An
+// explicit panel-release always wins, and a genuinely custom panel repository
+// is left on /releases/latest because its versioning is the operator's own.
+//
+// The built-in repository is matched by value, not by emptiness: config loading
+// substitutes config.DefaultPanelGitHubRepository whenever the key is unset, so
+// an unset repository still arrives here fully populated.
+func effectivePanelRelease(panelRepository, panelRelease string) string {
+	if tag := strings.TrimSpace(panelRelease); tag != "" {
+		return tag
+	}
+	owner, name := panelRepoOwnerAndName(panelRepository)
+	if strings.EqualFold(owner, defaultPanelOwner) && strings.EqualFold(name, defaultPanelName) {
+		return defaultPanelCompatibleRelease
+	}
+	return ""
 }
 
 // resolveReleaseTagURL builds the API URL for a specific release tag of the panel
