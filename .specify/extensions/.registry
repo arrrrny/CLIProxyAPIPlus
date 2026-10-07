@@ -105,6 +105,24 @@
       },
       "registered_skills": [],
       "installed_at": "2026-08-30T10:53:41.202606+00:00"
+    },
+    "spec-stats": {
+      "version": "1.2.0",
+      "source": "local",
+      "manifest_hash": "sha256:3281437807cdc2d09c972210e9a92d6e95aea65b38bd0f70619485a542a41175",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "kimi": [
+          "speckit.spec-stats.report",
+          "speckit.spec-stats.open",
+          "speckit.spec-stats.not-green",
+          "speckit.spec-stats.reconcile",
+          "speckit.spec-stats.runs"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-10-07T09:07:10.047440+00:00"
     }
   }
 }
