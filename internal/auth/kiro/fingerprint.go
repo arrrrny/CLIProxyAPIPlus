@@ -49,32 +49,36 @@ type FingerprintManager struct {
 
 var (
 	// SDK versions
+	// Versions observed in Kiro 1.4.154's bundled AWS SDK JS clients
 	oidcSDKVersions = []string{
-		"3.980.0", "3.975.0", "3.972.0", "3.808.0",
-		"3.738.0", "3.737.0", "3.736.0", "3.735.0",
+		"3.997.46", "3.994.0", "3.980.0", "3.977.6",
+		"3.975.0", "3.972.0", "3.969.0",
 	}
 	// SDKVersions for getUsageLimits/ListAvailableModels/GetProfile (runtime API)
+	// 1.0.0 is the @amzn/kiro-runtime-service-typescript-client version bundled with Kiro 1.4.154
 	runtimeSDKVersions = []string{"1.0.0"}
 	// SDKVersions for generateAssistantResponse (streaming API)
-	streamingSDKVersions = []string{"1.0.27"}
+	// 1.0.44 is the @aws/codewhisperer-streaming-client version bundled with Kiro 1.4.154
+	streamingSDKVersions = []string{"1.0.44"}
 	// Valid OS types
 	osTypes = []string{"darwin", "windows", "linux"}
 	// OS versions
 	osVersions = map[string][]string{
-		"darwin":  {"25.2.0", "25.1.0", "25.0.0", "24.5.0", "24.4.0", "24.3.0"},
+		"darwin":  {"25.6.0", "25.5.0", "25.2.0", "25.1.0", "25.0.0", "24.5.0", "24.4.0", "24.3.0"},
 		"windows": {"10.0.26200", "10.0.26100", "10.0.22631", "10.0.22621", "10.0.19045"},
 		"linux":   {"6.12.0", "6.11.0", "6.8.0", "6.6.0", "6.5.0", "6.1.0"},
 	}
 	// Node versions
+	// 24.22.1 is bundled with Electron 44 (Kiro 1.4.154)
 	nodeVersions = []string{
-		"22.21.1", "22.21.0", "22.20.0", "22.19.0", "22.18.0",
-		"20.18.0", "20.17.0", "20.16.0",
+		"24.22.1",
 	}
 	// Kiro IDE versions
+	// Amazon enforces a minimum client version: 0.x clients are rejected with
+	// "This version of Kiro is no longer supported" (verified 2026-11-12).
+	// 1.4.154 is the current release; keep this pinned to a supported version.
 	kiroVersions = []string{
-		"0.10.32", "0.10.16", "0.10.10",
-		"0.9.47", "0.9.40", "0.9.2",
-		"0.8.206", "0.8.140", "0.8.135", "0.8.86",
+		"1.4.154",
 	}
 	// Global singleton
 	globalFingerprintManager     *FingerprintManager

@@ -450,10 +450,11 @@ func TestSDKVersionsAreValid(t *testing.T) {
 }
 
 func TestKiroVersionsAreValid(t *testing.T) {
-	// Verify all Kiro versions match expected format (0.x.xxx)
+	// Verify all Kiro versions match expected format (1.x.xxx)
+	// Amazon rejects 0.x clients with "This version of Kiro is no longer supported".
 	for _, v := range kiroVersions {
-		if !strings.HasPrefix(v, "0.") {
-			t.Errorf("Kiro version should start with 0.: %s", v)
+		if !strings.HasPrefix(v, "1.") {
+			t.Errorf("Kiro version should start with 1.: %s", v)
 		}
 		parts := strings.Split(v, ".")
 		if len(parts) != 3 {
@@ -469,9 +470,9 @@ func TestNodeVersionsAreValid(t *testing.T) {
 		if len(parts) != 3 {
 			t.Errorf("Node version should have 3 parts: %s", v)
 		}
-		// Should be Node 20.x or 22.x
-		if !strings.HasPrefix(v, "20.") && !strings.HasPrefix(v, "22.") {
-			t.Errorf("Node version should be 20.x or 22.x LTS: %s", v)
+		// Should be Node 22.x or 24.x (Kiro 1.4.x bundles Node 24.x via Electron 44)
+		if !strings.HasPrefix(v, "22.") && !strings.HasPrefix(v, "24.") {
+			t.Errorf("Node version should be 22.x or 24.x: %s", v)
 		}
 	}
 }
