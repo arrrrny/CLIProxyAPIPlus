@@ -26,6 +26,9 @@ var openCodeCuratedWindows = map[string]ProviderModelLimit{
 	"claude-sonnet-4":   {ContextLength: 200000, MaxCompletionTokens: 64000},
 	"claude-haiku-4-5":  {ContextLength: 200000, MaxCompletionTokens: 8000},
 	// Gemini family (1M context)
+	"gemini-4-argon":        {ContextLength: 1048576, MaxCompletionTokens: 1048576},
+	"gemini-4-carbon":       {ContextLength: 1048576, MaxCompletionTokens: 1048576},
+	"gemini-4-hydrogen":     {ContextLength: 1048576, MaxCompletionTokens: 1048576},
 	"gemini-3.6-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
 	"gemini-3.8-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
 	"gemini-3.7-flash":      {ContextLength: 1048576, MaxCompletionTokens: 65536},
