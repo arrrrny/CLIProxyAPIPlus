@@ -183,7 +183,14 @@ func TestLookupModelInfoIncludesClaudeSonnet5(t *testing.T) {
 // requests for those models with "unknown provider for model". These tests pin
 // the overrides that keep the catalog honest regardless of what is fetched.
 func TestAntigravityCatalogSurvivesRegistryRefresh(t *testing.T) {
-	// What the shared registry actually publishes today.
+	// What the shared registry has advertised at various points: the Claude
+	// -5-5 ids no Antigravity account can execute, plus Gemini ids that were
+	// live when this test was first written. The shared registry's Gemini
+	// section lags upstream (this is the PR #30 premise — it still carries the
+	// renamed Gemini 4 ids and the retired 3.6/3.7 Flash tiers), so the ones
+	// listed here are treated as "left alone" only where they are not in the
+	// unsupported set; the newer dead ids are covered by the dedicated drop
+	// test below.
 	registry := []*ModelInfo{
 		{ID: "claude-opus-5-5-high", OwnedBy: "antigravity", Type: "antigravity"},
 		{ID: "claude-sonnet-5-5-high", OwnedBy: "antigravity", Type: "antigravity"},
@@ -215,10 +222,35 @@ func TestAntigravityCatalogSurvivesRegistryRefresh(t *testing.T) {
 	}
 }
 
+// TestAntigravityUnsupportedModelsAreDroppedFromRegistry proves the newer
+// blocklist entries (the renamed Gemini 4 ids and the retired 3.6/3.7 Flash
+// tiers) are filtered out of a fetched/shared catalog. The indirect loop in
+// TestAntigravityLocalModelsAreComplete only asserts they are absent from the
+// published set — it would also pass if a newly-added id were never present in
+// getModels().Antigravity to begin with. This test seeds them directly and
+// asserts the drop-then-upsert pipeline removes each one.
+func TestAntigravityUnsupportedModelsAreDroppedFromRegistry(t *testing.T) {
+	registry := make([]*ModelInfo, 0, len(antigravityUnsupportedModelIDs))
+	for id := range antigravityUnsupportedModelIDs {
+		registry = append(registry, &ModelInfo{ID: id, OwnedBy: "antigravity", Type: "antigravity"})
+	}
+
+	got := make(map[string]bool)
+	for _, model := range upsertModelInfos(dropModelInfos(registry, antigravityUnsupportedModelIDs), antigravityLocalModels...) {
+		got[model.ID] = true
+	}
+
+	for id := range antigravityUnsupportedModelIDs {
+		if got[id] {
+			t.Errorf("unsupported Antigravity model %q must be dropped from a refreshed registry", id)
+		}
+	}
+}
+
 func TestAntigravityFlashTierModelsAreWellFormed(t *testing.T) {
 	tiers := antigravityFlashTierModels()
-	if len(tiers) != 9 {
-		t.Fatalf("expected 3 versions x 3 tiers, got %d", len(tiers))
+	if len(tiers) != 3 {
+		t.Fatalf("expected 1 version x 3 tiers, got %d", len(tiers))
 	}
 
 	seen := make(map[string]bool, len(tiers))

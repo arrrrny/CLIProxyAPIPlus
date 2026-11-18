@@ -65,6 +65,10 @@ sdk/api/handlers/openai/endpoint_compat.go                 :: resolveEndpointOve
 # --- fork OAuth model alias defaults ---
 internal/config/oauth_model_alias_defaults.go              :: defaultKiroAliases
 
+# --- Antigravity catalog overrides (fork keeps models the shared registry omits) ---
+internal/registry/model_definitions.go                     :: antigravityLocalModels
+internal/registry/models/models.json                       :: gemini-3.6-flash-high
+
 # --- AMP module registry (V2 route modules) ---
 internal/api/modules/modules.go                            :: RouteModuleV2
 
