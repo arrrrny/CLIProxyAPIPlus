@@ -217,8 +217,8 @@ func TestAntigravityCatalogSurvivesRegistryRefresh(t *testing.T) {
 
 func TestAntigravityFlashTierModelsAreWellFormed(t *testing.T) {
 	tiers := antigravityFlashTierModels()
-	if len(tiers) != 9 {
-		t.Fatalf("expected 3 versions x 3 tiers, got %d", len(tiers))
+	if len(tiers) != 3 {
+		t.Fatalf("expected 1 version x 3 tiers, got %d", len(tiers))
 	}
 
 	seen := make(map[string]bool, len(tiers))

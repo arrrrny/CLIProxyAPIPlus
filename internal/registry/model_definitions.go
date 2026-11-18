@@ -161,13 +161,41 @@ var antigravityLocalModels = []*ModelInfo{
 			Levels:         []string{"low", "medium", "high"},
 		},
 	},
+	// Gemini 4 Hydrogen (Sonar) is the one Gemini 4 id upstream actually serves.
+	// fetchAvailableModels publishes it without a tag while its siblings are
+	// published as *-disabled and gated to Ultra / paid Pro plans, and
+	// generateContent answers 200 for it (quota permitting) where the
+	// *-disabled ids answer 404. Verified 2026-11-18.
+	{
+		ID:                  "gemini-4-hydrogen-sonar",
+		Object:              "model",
+		OwnedBy:             "antigravity",
+		Type:                "antigravity",
+		DisplayName:         "Gemini 4 Hydrogen (Sonar)",
+		ContextLength:       1048576,
+		MaxCompletionTokens: 65536,
+		Thinking: &ThinkingSupport{
+			Min:            1,
+			Max:            65535,
+			DynamicAllowed: true,
+			Levels:         []string{"low", "medium", "high", "xhigh"},
+		},
+		SupportedInputModalities:  []string{"text", "image", "audio", "video"},
+		SupportedOutputModalities: []string{"text"},
+	},
 }
 
-// antigravityFlashTierModels are the per-tier Gemini 3.6/3.7/3.8 Flash variants.
+// antigravityFlashTierModels are the per-tier Gemini Flash variants.
 // Antigravity ships them alongside each family's -high entry and lists them in
 // tieredModelIds; only the -high member of each family reaches the shared
 // registry. They are generated from a shared template because the families are
 // identical apart from version and tier.
+//
+// Only versions v1internal:fetchAvailableModels still lists may appear here.
+// Verified 2026-11-18: the 3.6 and 3.7 families are gone from the upstream
+// catalog entirely (no tier answers generateContent; the ids return 404), so
+// generating them only advertised models every request failed on. Extend
+// versions once a family returns upstream.
 func antigravityFlashTierModels() []*ModelInfo {
 	tiers := []struct {
 		suffix      string
@@ -177,7 +205,7 @@ func antigravityFlashTierModels() []*ModelInfo {
 		{"medium", "Medium"},
 		{"tiered", "Tiered"},
 	}
-	versions := []string{"3.6", "3.7", "3.8"}
+	versions := []string{"3.8"}
 
 	models := make([]*ModelInfo, 0, len(versions)*len(tiers))
 	for _, version := range versions {
@@ -218,6 +246,25 @@ func antigravityFlashTierModels() []*ModelInfo {
 var antigravityUnsupportedModelIDs = map[string]struct{}{
 	"claude-opus-5-5-high":   {},
 	"claude-sonnet-5-5-high": {},
+	// Gemini 4: the shared registry carries these ids, but upstream renamed them.
+	// fetchAvailableModels publishes gemini-4-argon-disabled / -carbon-disabled /
+	// -hydrogen-disabled (all tagged "Unavailable" and plan-gated to Ultra or paid
+	// Pro) and gemini-4-hydrogen-sonar. generateContent answers 404 NOT_FOUND for
+	// the ids below, so publishing them only strands requests. Verified 2026-11-18.
+	"gemini-4-argon-high":     {},
+	"gemini-4-carbon-high":    {},
+	"gemini-4-hydrogen-xhigh": {},
+	// Gemini 3.6 / 3.7 Flash families: retired upstream. fetchAvailableModels
+	// lists no 3.6 or 3.7 entry at all and every tier answers 404. The shared
+	// registry still advertises them. Verified 2026-11-18.
+	"gemini-3.6-flash-high":   {},
+	"gemini-3.7-flash-high":   {},
+	"gemini-3.6-flash-low":    {},
+	"gemini-3.6-flash-medium": {},
+	"gemini-3.6-flash-tiered": {},
+	"gemini-3.7-flash-low":    {},
+	"gemini-3.7-flash-medium": {},
+	"gemini-3.7-flash-tiered": {},
 }
 
 // antigravityExcludedModelIDs are models this build deliberately does not
