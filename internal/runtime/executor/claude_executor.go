@@ -149,7 +149,13 @@ var oauthToolsToRemove = map[string]bool{}
 
 // Anthropic-compatible upstreams may reject or even crash when Claude models
 // omit max_tokens. Prefer registered model metadata before using a fallback.
-const defaultModelMaxTokens = 1024
+//
+// The fallback must be generous: a thinking model spends this budget on
+// reasoning before it emits any text, so a small value truncates the reasoning
+// phase and the response carries no content at all. The previous 1024 was below
+// even a single reasoning turn on the current generation, whose registered
+// limit is 64000.
+const defaultModelMaxTokens = 64000
 
 func NewClaudeExecutor(cfg *config.Config) *ClaudeExecutor { return &ClaudeExecutor{cfg: cfg} }
 
