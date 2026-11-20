@@ -1924,14 +1924,7 @@ func (e *AntigravityExecutor) buildRequest(ctx context.Context, auth *cliproxyau
 	payload = geminiToAntigravity(modelName, payload, projectID)
 	payload, _ = sjson.SetBytes(payload, "model", modelName)
 
-	// Cap maxOutputTokens to model's max_completion_tokens from registry
-	if maxOut := gjson.GetBytes(payload, "request.generationConfig.maxOutputTokens"); maxOut.Exists() && maxOut.Type == gjson.Number {
-		if modelInfo := registry.LookupModelInfo(modelName, "antigravity"); modelInfo != nil && modelInfo.MaxCompletionTokens > 0 {
-			if int(maxOut.Int()) > modelInfo.MaxCompletionTokens {
-				payload, _ = sjson.SetBytes(payload, "request.generationConfig.maxOutputTokens", modelInfo.MaxCompletionTokens)
-			}
-		}
-	}
+	payload = ensureAntigravityMaxOutputTokens(payload, modelName)
 
 	// The gemini-3-pro clause no longer matches any registered antigravity model
 	// (gemini-3-pro-high/-low are gone from the backend catalog); it is kept because
@@ -1958,8 +1951,6 @@ func (e *AntigravityExecutor) buildRequest(ctx context.Context, auth *cliproxyau
 		if strings.Contains(modelName, "claude") {
 			updated, _ := sjson.SetBytes([]byte(payloadStr), "request.toolConfig.functionCallingConfig.mode", "VALIDATED")
 			payloadStr = string(updated)
-		} else {
-			payloadStr, _ = sjson.Delete(payloadStr, "request.generationConfig.maxOutputTokens")
 		}
 
 		payloadStrBytes := applyAntigravityNativeSignatureReplayIfNeeded(modelName, []byte(payloadStr))
@@ -1970,8 +1961,6 @@ func (e *AntigravityExecutor) buildRequest(ctx context.Context, auth *cliproxyau
 	} else {
 		if strings.Contains(modelName, "claude") {
 			payload, _ = sjson.SetBytes(payload, "request.toolConfig.functionCallingConfig.mode", "VALIDATED")
-		} else {
-			payload, _ = sjson.DeleteBytes(payload, "request.generationConfig.maxOutputTokens")
 		}
 
 		payload = applyAntigravityNativeSignatureReplayIfNeeded(modelName, payload)
@@ -2030,6 +2019,30 @@ func (e *AntigravityExecutor) buildRequest(ctx context.Context, auth *cliproxyau
 	})
 
 	return httpReq, nil
+}
+
+// ensureAntigravityMaxOutputTokens pins the output budget for non-Claude
+// (Gemini) Antigravity models. Antigravity accepts maxOutputTokens for these
+// models, and a thinking model spends the budget on reasoning before it emits
+// any text: when the field is stripped, or left to the upstream default, a
+// reasoning-heavy turn exhausts it and the response comes back with
+// finish_reason=max_tokens and no content at all. Pin it to the registered
+// limit, and supply that limit when the client omitted one.
+func ensureAntigravityMaxOutputTokens(payload []byte, modelName string) []byte {
+	if strings.Contains(modelName, "claude") {
+		return payload
+	}
+	modelInfo := registry.LookupModelInfo(modelName, "antigravity")
+	if modelInfo == nil || modelInfo.MaxCompletionTokens <= 0 {
+		return payload
+	}
+	limit := int64(modelInfo.MaxCompletionTokens)
+	maxOut := gjson.GetBytes(payload, "request.generationConfig.maxOutputTokens")
+	if maxOut.Exists() && maxOut.Type == gjson.Number && maxOut.Int() > 0 && maxOut.Int() <= limit {
+		return payload
+	}
+	payload, _ = sjson.SetBytes(payload, "request.generationConfig.maxOutputTokens", limit)
+	return payload
 }
 
 func antigravityRequestNeedsSchemaSanitization(payload []byte) bool {

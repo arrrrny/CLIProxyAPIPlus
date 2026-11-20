@@ -281,11 +281,98 @@ func assertNonSchemaRequestPreserved(t *testing.T, body map[string]any) {
 		t.Fatalf("x-extra should be preserved outside schema cleanup path, got=%v", nonSchema["x-extra"])
 	}
 
+	// A non-Claude (Gemini) request keeps its output budget. Stripping it left
+	// the upstream default in charge, which a thinking model exhausts on
+	// reasoning before emitting any text.
 	if generationConfig, ok := request["generationConfig"].(map[string]any); ok {
-		if _, ok := generationConfig["maxOutputTokens"]; ok {
-			t.Fatalf("maxOutputTokens should still be removed for non-Claude requests")
+		if got, ok := generationConfig["maxOutputTokens"].(float64); !ok || got != 128 {
+			t.Fatalf("maxOutputTokens should be preserved for non-Claude requests, got=%v", generationConfig["maxOutputTokens"])
 		}
 	}
+}
+
+func TestAntigravityBuildRequest_PinsMaxOutputTokensForGemini(t *testing.T) {
+	// gemini-4-hydrogen-sonar is registered with a 65536 output limit.
+	const model = "gemini-4-hydrogen-sonar"
+
+	maxOutputTokensOf := func(t *testing.T, body map[string]any) float64 {
+		t.Helper()
+		request, ok := body["request"].(map[string]any)
+		if !ok {
+			t.Fatalf("request missing or invalid type")
+		}
+		generationConfig, ok := request["generationConfig"].(map[string]any)
+		if !ok {
+			t.Fatalf("generationConfig missing or invalid type")
+		}
+		got, ok := generationConfig["maxOutputTokens"].(float64)
+		if !ok {
+			t.Fatalf("maxOutputTokens missing, generationConfig=%v", generationConfig)
+		}
+		return got
+	}
+
+	t.Run("supplies the registered limit when the client omits one", func(t *testing.T) {
+		body := buildRequestBodyFromRawPayload(t, model, []byte(`{
+			"request": {
+				"contents": [{"role": "user", "parts": [{"text": "hi"}]}]
+			}
+		}`))
+		if got := maxOutputTokensOf(t, body); got != 65536 {
+			t.Fatalf("maxOutputTokens = %v, want 65536", got)
+		}
+	})
+
+	t.Run("caps a budget above the registered limit", func(t *testing.T) {
+		body := buildRequestBodyFromRawPayload(t, model, []byte(`{
+			"request": {
+				"contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+				"generationConfig": {"maxOutputTokens": 500000}
+			}
+		}`))
+		if got := maxOutputTokensOf(t, body); got != 65536 {
+			t.Fatalf("maxOutputTokens = %v, want 65536", got)
+		}
+	})
+
+	t.Run("keeps a budget within the registered limit", func(t *testing.T) {
+		body := buildRequestBodyFromRawPayload(t, model, []byte(`{
+			"request": {
+				"contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+				"generationConfig": {"maxOutputTokens": 4096}
+			}
+		}`))
+		if got := maxOutputTokensOf(t, body); got != 4096 {
+			t.Fatalf("maxOutputTokens = %v, want 4096", got)
+		}
+	})
+
+	// A tool-bearing request takes the schema-sanitization branch, which is the
+	// path an agent client actually exercises.
+	t.Run("survives the schema sanitization branch", func(t *testing.T) {
+		body := buildRequestBodyFromRawPayload(t, model, []byte(`{
+			"request": {
+				"tools": [
+					{
+						"function_declarations": [
+							{
+								"name": "tool_1",
+								"parametersJsonSchema": {
+									"type": "object",
+									"properties": {"arg": {"type": "string"}}
+								}
+							}
+						]
+					}
+				],
+				"contents": [{"role": "user", "parts": [{"text": "hi"}]}],
+				"generationConfig": {"maxOutputTokens": 1024}
+			}
+		}`))
+		if got := maxOutputTokensOf(t, body); got != 1024 {
+			t.Fatalf("maxOutputTokens = %v, want 1024", got)
+		}
+	})
 }
 
 func buildRequestBodyFromPayload(t *testing.T, modelName string) map[string]any {
