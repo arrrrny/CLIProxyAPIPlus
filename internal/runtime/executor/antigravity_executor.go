@@ -476,7 +476,7 @@ func injectEnabledCreditTypes(payload []byte) []byte {
 // the same credential here is what made one client request hammer every account twice;
 // credential failover belongs to the conductor.
 func classifyAntigravity429(body []byte) antigravity429Category {
-	switch decideAntigravity429(body).kind {
+	switch decideAntigravity429(body, nil).kind {
 	case antigravity429DecisionInstantRetrySameAuth, antigravity429DecisionShortCooldownSwitchAuth:
 		return antigravity429RateLimited
 	case antigravity429DecisionFullQuotaExhausted:
@@ -488,14 +488,19 @@ func classifyAntigravity429(body []byte) antigravity429Category {
 	}
 }
 
-func decideAntigravity429(body []byte) antigravity429Decision {
+func decideAntigravity429(body []byte, headerRetryAfter *time.Duration) antigravity429Decision {
 	decision := antigravity429Decision{kind: antigravity429DecisionSoftRetry}
 	if len(body) == 0 {
+		decision.retryAfter = headerRetryAfter
 		return decision
 	}
 
 	if retryAfter, parseErr := helps.ParseRetryDelay(body); parseErr == nil && retryAfter != nil {
 		decision.retryAfter = retryAfter
+	}
+	// Fall back to the HTTP Retry-After header when the body carries no RetryInfo.
+	if decision.retryAfter == nil {
+		decision.retryAfter = headerRetryAfter
 	}
 
 	status := strings.TrimSpace(gjson.GetBytes(body, "error.status").String())
@@ -722,7 +727,7 @@ func (e *AntigravityExecutor) Execute(ctx context.Context, auth *cliproxyauth.Au
 	helps.AppendAPIResponseChunk(ctx, e.cfg, bodyBytes)
 
 	if httpResp.StatusCode == http.StatusTooManyRequests {
-		decision := decideAntigravity429(bodyBytes)
+		decision := decideAntigravity429(bodyBytes, helps.ParseRetryAfterHeader(httpResp.Header))
 		switch decision.kind {
 		case antigravity429DecisionShortCooldownSwitchAuth:
 			if decision.retryAfter != nil && *decision.retryAfter > 0 {
@@ -857,7 +862,7 @@ func (e *AntigravityExecutor) executeClaudeNonStream(ctx context.Context, auth *
 		}
 		helps.AppendAPIResponseChunk(ctx, e.cfg, bodyBytes)
 		if httpResp.StatusCode == http.StatusTooManyRequests {
-			decision := decideAntigravity429(bodyBytes)
+			decision := decideAntigravity429(bodyBytes, helps.ParseRetryAfterHeader(httpResp.Header))
 
 			switch decision.kind {
 			case antigravity429DecisionShortCooldownSwitchAuth:
@@ -1244,7 +1249,7 @@ func (e *AntigravityExecutor) ExecuteStream(ctx context.Context, auth *cliproxya
 		}
 		helps.AppendAPIResponseChunk(ctx, e.cfg, bodyBytes)
 		if httpResp.StatusCode == http.StatusTooManyRequests {
-			decision := decideAntigravity429(bodyBytes)
+			decision := decideAntigravity429(bodyBytes, helps.ParseRetryAfterHeader(httpResp.Header))
 
 			switch decision.kind {
 			case antigravity429DecisionShortCooldownSwitchAuth:

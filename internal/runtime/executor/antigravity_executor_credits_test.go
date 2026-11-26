@@ -162,7 +162,7 @@ func TestClassifyAntigravity429(t *testing.T) {
 		if got := classifyAntigravity429(body); got != antigravity429RateLimited {
 			t.Fatalf("classifyAntigravity429() = %q, want %q", got, antigravity429RateLimited)
 		}
-		decision := decideAntigravity429(body)
+		decision := decideAntigravity429(body, nil)
 		if decision.kind != antigravity429DecisionInstantRetrySameAuth {
 			t.Fatalf("decideAntigravity429().kind = %q, want %q", decision.kind, antigravity429DecisionInstantRetrySameAuth)
 		}

@@ -2,6 +2,7 @@ package helps
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -77,4 +78,33 @@ func ParseRetryDelay(errorBody []byte) (*time.Duration, error) {
 	}
 
 	return nil, fmt.Errorf("no RetryInfo found")
+}
+
+// ParseRetryAfterHeader parses the HTTP Retry-After response header, accepting
+// both the delta-seconds form ("120") and the absolute HTTP-date form. It
+// returns nil when the header is absent or unparsable, so callers can fall back
+// to the body's RetryInfo. Mirrors the upstream retryAfterFromHeaders behavior.
+func ParseRetryAfterHeader(header http.Header) *time.Duration {
+	if len(header) == 0 {
+		return nil
+	}
+	raw := strings.TrimSpace(header.Get("Retry-After"))
+	if raw == "" {
+		return nil
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds < 0 {
+			return nil
+		}
+		d := time.Duration(seconds) * time.Second
+		return &d
+	}
+	if when, err := http.ParseTime(raw); err == nil {
+		d := time.Until(when)
+		if d <= 0 {
+			return nil
+		}
+		return &d
+	}
+	return nil
 }
